@@ -1,0 +1,690 @@
+{
+  "schema_version": 1,
+  "features": [
+    {
+      "id": "F001",
+      "title": "[DEMO] Bootstrap Python application repository",
+      "behavior": "С нуля создаётся структура проекта: backend/ для production-кода, tests/unit/, tests/integration/, tests/e2e/, scripts/, pyproject.toml, docker-compose.yml и docs/. В backend/ создаётся FastAPI application factory. GET /health/live работает без внешних сервисов.",
+      "state": "pass",
+      "depends_on": [],
+      "verification": "pytest -q tests/unit/test_app_bootstrap.py",
+      "evidence": "uv run --frozen pytest -q tests/unit/test_app_bootstrap.py: 2 passed; docker compose config: passed"
+    },
+    {
+      "id": "F002",
+      "title": "[DEMO] Establish verification pipeline",
+      "behavior": "Создаются scripts/verify-unit.sh, scripts/verify-integration.sh, scripts/verify-e2e.sh и scripts/verify.sh. Pytest markers разделяют unit/integration/e2e. Скрипты корректно возвращают ненулевой exit code при падении проверки.",
+      "state": "pass",
+      "depends_on": [
+        "F001"
+      ],
+      "verification": "./scripts/verify-unit.sh",
+      "evidence": "./scripts/verify-unit.sh: 17 passed; ./scripts/verify.sh: exit 0; empty suites and genuine failure propagation independently verified"
+    },
+    {
+      "id": "F003",
+      "title": "[DEMO] Add Ruff and gradual mypy checks",
+      "behavior": "В pyproject.toml добавляются Ruff и mypy в gradual/non-strict режиме. Создаются scripts/lint.sh и scripts/typecheck.sh. Общий verification pipeline запускает lint, format check, type-check и тесты.",
+      "state": "pass",
+      "depends_on": [
+        "F002"
+      ],
+      "verification": "./scripts/lint.sh && ./scripts/typecheck.sh",
+      "evidence": "./scripts/lint.sh && ./scripts/typecheck.sh: pass; ./scripts/verify.sh: 27 unit tests and all quality/test stages passed"
+    },
+    {
+      "id": "F004",
+      "title": "[DEMO] Implement typed application configuration",
+      "behavior": "Добавляются typed settings для environment, demo owner mode, PostgreSQL, MinIO, Qdrant, Neo4j, LightRAG, embedding endpoint, external LLM и logging. На этом этапе OIDC settings не обязательны. Секреты не получают небезопасных production defaults.",
+      "state": "pass",
+      "depends_on": [
+        "F003"
+      ],
+      "verification": "pytest -q tests/unit/config",
+      "evidence": "pytest -q tests/unit/config: 23 passed; full verification pipeline: 50 unit tests, Ruff and mypy passed"
+    },
+    {
+      "id": "F005",
+      "title": "[DEMO] Add structured operational logging",
+      "behavior": "Добавляется structured JSON logging с request_id, service, workspace_id, document_id, operation, duration_ms и result. Секреты, Authorization, document content, embeddings и полные prompts/responses не логируются.",
+      "state": "pass",
+      "depends_on": [
+        "F004"
+      ],
+      "verification": "pytest -q tests/unit/observability/test_logging.py",
+      "evidence": "pytest -q tests/unit/observability/test_logging.py: 16 passed; adversarial disclosure probes passed; full pipeline: 66 unit tests"
+    },
+    {
+      "id": "F006",
+      "title": "[DEMO] Bootstrap PostgreSQL in Docker Compose",
+      "behavior": "В docker-compose.yml добавляются rag-api и PostgreSQL с healthcheck, named volume и internal network. Приложение получает readiness dependency на PostgreSQL. Проверяется persistence после restart.",
+      "state": "pass",
+      "depends_on": [
+        "F004"
+      ],
+      "verification": "pytest -q tests/integration/test_postgres_bootstrap.py",
+      "evidence": "uv run --frozen pytest -q tests/integration/test_postgres_bootstrap.py: 1 passed on real Docker Compose; readiness 200/503 and liveness independence verified; PostgreSQL row persisted after force-recreate; ./scripts/verify.sh: 68 unit and 1 integration passed"
+    },
+    {
+      "id": "F007",
+      "title": "[DEMO] Introduce application database migrations",
+      "behavior": "Добавляется Alembic или эквивалентный механизм application migrations. Создаётся app schema и versioned migration history. Повторный upgrade актуальной БД идемпотентен.",
+      "state": "not started",
+      "depends_on": [
+        "F006"
+      ],
+      "verification": "pytest -q tests/integration/test_migrations.py",
+      "evidence": ""
+    },
+    {
+      "id": "F008",
+      "title": "[DEMO] Persist workspaces",
+      "behavior": "Создаётся минимальная таблица workspaces: UUID id, name, slug, immutable server-generated storage_key, status и timestamps. Rename не меняет storage_key. Repository не зависит от authentication tables.",
+      "state": "not started",
+      "depends_on": [
+        "F007"
+      ],
+      "verification": "pytest -q tests/unit/workspaces/test_repository.py tests/integration/test_workspace_schema.py",
+      "evidence": ""
+    },
+    {
+      "id": "F009",
+      "title": "[DEMO] Introduce security boundary and DemoOwner mode",
+      "behavior": "С нуля определяются PrincipalContext, Permission, AuthorizedWorkspaceContext, IdentityResolver и WorkspaceAccessPolicy. Реализуются DemoOwnerIdentityResolver и DemoOwnerAccessPolicy. В GRAPH_BLIZZ_AUTH__MODE=demo_owner Authorization header и IdP не требуются; owner получает permissions для всех Demo/MVP operations. Никакие OIDC/RBAC/ACL tables не являются dependency этой задачи.",
+      "state": "not started",
+      "depends_on": [
+        "F004",
+        "F008"
+      ],
+      "verification": "pytest -q tests/unit/security/test_demo_owner_mode.py tests/integration/test_demo_owner_http.py",
+      "evidence": ""
+    },
+    {
+      "id": "F010",
+      "title": "[DEMO] Expose owner-only workspace API",
+      "behavior": "Реализуются POST/GET workspace endpoints. Они получают AuthorizedWorkspaceContext через DemoOwner adapter и работают без JWT, users и workspace_members. storage_key никогда не принимается от клиента и не раскрывается как mutable field.",
+      "state": "not started",
+      "depends_on": [
+        "F008",
+        "F009"
+      ],
+      "verification": "pytest -q tests/unit/api/test_workspaces_demo.py tests/integration/test_workspace_api_demo.py",
+      "evidence": ""
+    },
+    {
+      "id": "F011",
+      "title": "[DEMO] Bootstrap MinIO object storage",
+      "behavior": "В Docker Compose добавляется MinIO с persistent volume и healthcheck. Реализуется минимальный ObjectStorage adapter put/get/delete. Проверяется persistence после restart.",
+      "state": "not started",
+      "depends_on": [
+        "F006"
+      ],
+      "verification": "pytest -q tests/unit/storage/test_object_store.py tests/integration/test_minio.py",
+      "evidence": ""
+    },
+    {
+      "id": "F012",
+      "title": "[DEMO] Persist minimal document registry",
+      "behavior": "Создаётся таблица documents: id, workspace_id, source_key, filename, source_type, object_uri, content_hash, status, timestamps. Статусы Demo: UPLOADED, INDEXING, READY, FAILED. Revisions и update/delete пока не реализуются.",
+      "state": "not started",
+      "depends_on": [
+        "F007",
+        "F008"
+      ],
+      "verification": "pytest -q tests/unit/documents/test_registry.py tests/integration/test_document_schema.py",
+      "evidence": ""
+    },
+    {
+      "id": "F013",
+      "title": "[DEMO] Store original document source",
+      "behavior": "DocumentSourceService сохраняет original source в MinIO до indexing и связывает object_uri с document metadata. При indexing failure source остаётся доступен. Используется простой Demo key без revision segment.",
+      "state": "not started",
+      "depends_on": [
+        "F011",
+        "F012"
+      ],
+      "verification": "pytest -q tests/unit/documents/test_source_storage.py tests/integration/test_document_source_storage.py",
+      "evidence": ""
+    },
+    {
+      "id": "F014",
+      "title": "[DEMO] Add basic parser abstraction",
+      "behavior": "Создаются DocumentParser, ParsedDocument, ParsedChunk и parser registry. Полноценно поддерживаются plain text и Markdown. Текстовые исходники Python/JS/TS/Java/Go на Demo могут обрабатываться PlainTextParser. Tree-sitter не является dependency Demo.",
+      "state": "not started",
+      "depends_on": [
+        "F003"
+      ],
+      "verification": "pytest -q tests/unit/parsers/test_registry.py tests/unit/parsers/test_text_parser.py",
+      "evidence": ""
+    },
+    {
+      "id": "F015",
+      "title": "[DEMO] Bootstrap Qdrant",
+      "behavior": "В Docker Compose добавляется Qdrant с healthcheck и persistent volume. Реализуется connectivity adapter. Прямой пользовательский API к Qdrant отсутствует.",
+      "state": "not started",
+      "depends_on": [
+        "F006"
+      ],
+      "verification": "pytest -q tests/integration/test_qdrant_bootstrap.py",
+      "evidence": ""
+    },
+    {
+      "id": "F016",
+      "title": "[DEMO] Bootstrap Neo4j",
+      "behavior": "В Docker Compose добавляется Neo4j с healthcheck и persistent volume. Проверяются connection и persistence. Neo4j не является публичной application boundary.",
+      "state": "not started",
+      "depends_on": [
+        "F006"
+      ],
+      "verification": "pytest -q tests/integration/test_neo4j_bootstrap.py",
+      "evidence": ""
+    },
+    {
+      "id": "F017",
+      "title": "[DEMO] Bootstrap vLLM embedding service",
+      "behavior": "Добавляется GPU Compose profile с ai-sage/Giga-Embeddings-instruct-480M-0826, Hugging Face cache и OpenAI-compatible /v1/embeddings endpoint. Обычный CI может использовать contract stub; GPU verification запускается отдельно.",
+      "state": "not started",
+      "depends_on": [
+        "F004"
+      ],
+      "verification": "pytest -q tests/unit/embeddings && pytest -q -m gpu tests/integration/test_vllm_embeddings.py",
+      "evidence": ""
+    },
+    {
+      "id": "F018",
+      "title": "[DEMO] Implement embedding client contract",
+      "behavior": "Создаётся единый embedding client с timeout, error mapping и dimension validation. rag-api и будущий worker используют один endpoint и не загружают модель локально.",
+      "state": "not started",
+      "depends_on": [
+        "F017"
+      ],
+      "verification": "pytest -q tests/unit/embeddings/test_client.py tests/integration/test_embedding_contract.py",
+      "evidence": ""
+    },
+    {
+      "id": "F019",
+      "title": "[DEMO] Implement minimal OpenAI-compatible LLM adapter",
+      "behavior": "Создаётся OpenAI-compatible client с base_url, model, secret, timeout и стабильным error mapping. Одна модель может обслуживать extraction и generation. Integration test использует локальный compatible stub.",
+      "state": "not started",
+      "depends_on": [
+        "F004"
+      ],
+      "verification": "pytest -q tests/unit/llm/test_client.py tests/integration/test_llm_compatible_api.py",
+      "evidence": ""
+    },
+    {
+      "id": "F020",
+      "title": "[DEMO] Wire LightRAG Core to storages and model clients",
+      "behavior": "Добавляется pinned LightRAG Core dependency. LightRAG настраивается на PostgreSQL-backed internal storage, Qdrant, Neo4j, embedding client и external LLM. Публичный LightRAG server не используется. Integration test доказывает минимальный insert/query на реальных storage.",
+      "state": "not started",
+      "depends_on": [
+        "F015",
+        "F016",
+        "F018",
+        "F019"
+      ],
+      "verification": "pytest -q tests/unit/rag/test_factory.py tests/integration/test_lightrag_storage_wiring.py",
+      "evidence": ""
+    },
+    {
+      "id": "F021",
+      "title": "[DEMO] Implement workspace-scoped LightRAG runtime registry",
+      "behavior": "LightRAGRuntimeRegistry создаёт runtime по server-generated workspace.storage_key после получения AuthorizedWorkspaceContext. Реализуются lazy initialization и graceful close. Client не может выбрать physical namespace напрямую.",
+      "state": "not started",
+      "depends_on": [
+        "F008",
+        "F009",
+        "F020"
+      ],
+      "verification": "pytest -q tests/unit/rag/test_runtime_registry.py tests/integration/test_runtime_workspace_isolation.py",
+      "evidence": ""
+    },
+    {
+      "id": "F022",
+      "title": "[DEMO] Implement reusable inline IndexingService",
+      "behavior": "IndexingService читает source, выбирает parser, переводит document в INDEXING, вызывает LightRAG insert и завершает READY/FAILED. Сервис не зависит от FastAPI request objects, чтобы позднее использоваться rag-worker без переписывания core logic.",
+      "state": "not started",
+      "depends_on": [
+        "F013",
+        "F014",
+        "F021"
+      ],
+      "verification": "pytest -q tests/unit/indexing/test_service.py tests/integration/test_inline_indexing.py",
+      "evidence": ""
+    },
+    {
+      "id": "F023",
+      "title": "[DEMO] Expose document upload/read API",
+      "behavior": "POST /v1/workspaces/{id}/documents работает в demo_owner mode без JWT: создаёт document metadata, сохраняет source и запускает inline IndexingService. GET list/get возвращают состояние. Для Demo допускается длительный HTTP request.",
+      "state": "not started",
+      "depends_on": [
+        "F009",
+        "F012",
+        "F022"
+      ],
+      "verification": "pytest -q tests/unit/api/test_documents_demo.py tests/integration/test_document_upload_demo.py",
+      "evidence": ""
+    },
+    {
+      "id": "F024",
+      "title": "[DEMO] Implement Graph RAG query API with minimal sources",
+      "behavior": "POST /v1/workspaces/{id}/query в demo_owner mode разрешает workspace runtime, выполняет LightRAG retrieval/generation и возвращает answer, workspace_id, request_id и минимум document_id/filename sources. Query path не зависит от users, memberships или JWT.",
+      "state": "not started",
+      "depends_on": [
+        "F021",
+        "F023"
+      ],
+      "verification": "pytest -q tests/unit/query/test_service.py tests/integration/test_query_api_demo.py",
+      "evidence": ""
+    },
+    {
+      "id": "F025",
+      "title": "[DEMO] Verify full Graph RAG happy path end-to-end",
+      "behavior": "E2E на чистом Compose создаёт workspace, загружает небольшой документ, дожидается READY, задаёт вопрос и проверяет ожидаемый факт и source document. Тест не конфигурирует OIDC/IdP и доказывает полноценную Demo functionality без real auth.",
+      "state": "not started",
+      "depends_on": [
+        "F024"
+      ],
+      "verification": "pytest -q tests/e2e/test_demo_graph_rag.py",
+      "evidence": ""
+    },
+    {
+      "id": "F026",
+      "title": "[DEMO] Provide deterministic init and Demo regression gate",
+      "behavior": "Создаётся ./scripts/init.sh: prerequisite checks, Compose start, migrations и readiness checks. Повторный запуск идемпотентен. scripts/verify-demo.sh запускает обязательные Demo checks. README содержит copy-paste команды workspace/upload/query и явно описывает owner-only limitation.",
+      "state": "not started",
+      "depends_on": [
+        "F025"
+      ],
+      "verification": "./scripts/verify-demo.sh",
+      "evidence": ""
+    },
+    {
+      "id": "F027",
+      "title": "[MVP] Add immutable document revisions",
+      "behavior": "Модель документов расширяется document_revisions, stable document_id, monotonically increasing revision, content_hash, immutable object key и active_revision. Existing Demo rows безопасно мигрируются в revision 1.",
+      "state": "not started",
+      "depends_on": [
+        "F026"
+      ],
+      "verification": "pytest -q tests/unit/documents/test_revisions.py tests/integration/test_document_revision_schema.py",
+      "evidence": ""
+    },
+    {
+      "id": "F028",
+      "title": "[MVP] Persist durable indexing jobs",
+      "behavior": "Создаётся jobs state machine PENDING, RUNNING, RETRY, SUCCEEDED, FAILED, CANCELLED с attempts, lease/heartbeat, timestamps и safe error metadata. Для одного document запрещены конфликтующие active mutation jobs.",
+      "state": "not started",
+      "depends_on": [
+        "F027"
+      ],
+      "verification": "pytest -q tests/unit/jobs/test_job_model.py tests/integration/test_job_constraints.py",
+      "evidence": ""
+    },
+    {
+      "id": "F029",
+      "title": "[MVP] Implement PostgreSQL job claiming and rag-worker",
+      "behavior": "Добавляется отдельный rag-worker process/container. Jobs claim через FOR UPDATE SKIP LOCKED или эквивалент. Worker вызывает существующий IndexingService, поддерживает heartbeat, graceful shutdown, retry и expired lease recovery.",
+      "state": "not started",
+      "depends_on": [
+        "F022",
+        "F028"
+      ],
+      "verification": "pytest -q tests/unit/worker tests/integration/test_job_claiming.py tests/integration/test_worker_recovery.py",
+      "evidence": ""
+    },
+    {
+      "id": "F030",
+      "title": "[MVP] Switch upload from inline indexing to durable jobs",
+      "behavior": "Public upload path сохраняет immutable source revision и атомарно создаёт indexing job, затем возвращает PENDING/job_id. Inline path может остаться только dev option. Security semantics остаются demo_owner.",
+      "state": "not started",
+      "depends_on": [
+        "F027",
+        "F029"
+      ],
+      "verification": "pytest -q tests/unit/api/test_documents_async.py tests/integration/test_document_upload_async.py",
+      "evidence": ""
+    },
+    {
+      "id": "F031",
+      "title": "[MVP] Make identical document upsert idempotent",
+      "behavior": "Под per-document transaction/lock одинаковый SHA-256 возвращает action=unchanged и не создаёт revision/job. Конкурентные identical upsert приводят к одной фактической mutation.",
+      "state": "not started",
+      "depends_on": [
+        "F030"
+      ],
+      "verification": "pytest -q tests/unit/workflows/test_document_noop.py tests/integration/test_document_upsert_concurrency.py",
+      "evidence": ""
+    },
+    {
+      "id": "F032",
+      "title": "[MVP] Replace changed document through LightRAG lifecycle",
+      "behavior": "Changed content создаёт новую revision, документ переходит в UPDATING, старая версия удаляется через supported LightRAG operation, новая индексируется, active_revision переключается только после успеха. Application не пишет vectors/graph entities напрямую.",
+      "state": "not started",
+      "depends_on": [
+        "F031"
+      ],
+      "verification": "pytest -q tests/unit/workflows/test_document_replace.py tests/integration/test_document_replace.py",
+      "evidence": ""
+    },
+    {
+      "id": "F033",
+      "title": "[MVP] Implement document deletion workflow",
+      "behavior": "DELETE создаёт durable job, переводит document в DELETING, вызывает LightRAG deletion и после подтверждения фиксирует DELETED. Source revisions сохраняются согласно простой retention policy.",
+      "state": "not started",
+      "depends_on": [
+        "F032"
+      ],
+      "verification": "pytest -q tests/unit/workflows/test_document_delete.py tests/integration/test_document_delete.py",
+      "evidence": ""
+    },
+    {
+      "id": "F034",
+      "title": "[MVP] Preserve recoverable state on workflow failures",
+      "behavior": "Ошибки parser, embedding, LLM, Qdrant, Neo4j или LightRAG не активируют неподтверждённую revision. Job получает RETRY/FAILED, а source и metadata сохраняются для безопасного повторного исполнения.",
+      "state": "not started",
+      "depends_on": [
+        "F029",
+        "F032",
+        "F033"
+      ],
+      "verification": "pytest -q tests/unit/workflows/test_failures.py tests/integration/test_indexing_failure_recovery.py",
+      "evidence": ""
+    },
+    {
+      "id": "F035",
+      "title": "[MVP] Recover in-flight workflows after restart",
+      "behavior": "После restart rag-api/rag-worker/PostgreSQL expired RUNNING jobs могут быть продолжены без duplicate revision, duplicate logical document или параллельной mutation.",
+      "state": "not started",
+      "depends_on": [
+        "F034"
+      ],
+      "verification": "pytest -q tests/integration/test_workflow_restart_recovery.py",
+      "evidence": ""
+    },
+    {
+      "id": "F036",
+      "title": "[MVP] Add Tree-sitter AST parsing foundation",
+      "behavior": "Basic parser registry расширяется Tree-sitter adapters для фиксированного начального набора, например Python, JavaScript/TypeScript/TSX, Java и Go. Syntax errors имеют deterministic fallback; бинарные форматы отклоняются.",
+      "state": "not started",
+      "depends_on": [
+        "F014",
+        "F026"
+      ],
+      "verification": "pytest -q tests/unit/parsers/test_tree_sitter.py tests/integration/test_ast_parsers.py",
+      "evidence": ""
+    },
+    {
+      "id": "F037",
+      "title": "[MVP] Produce semantic code chunks",
+      "behavior": "Source code делится по module/class/function/method boundaries; слишком крупные symbols дополнительно режутся по token limit. Каждый chunk сохраняет path, language, symbol, symbol_type, parent_symbol и start/end line.",
+      "state": "not started",
+      "depends_on": [
+        "F036"
+      ],
+      "verification": "pytest -q tests/unit/parsers/test_code_chunking.py",
+      "evidence": ""
+    },
+    {
+      "id": "F038",
+      "title": "[MVP] Preserve rich source provenance through retrieval",
+      "behavior": "Query response для source code возвращает document_id, revision, path, language, symbol и line ranges, когда они доступны. Metadata проходит parser -> indexing -> retrieval без потери document identity.",
+      "state": "not started",
+      "depends_on": [
+        "F032",
+        "F037"
+      ],
+      "verification": "pytest -q tests/unit/query/test_sources.py tests/integration/test_query_source_traceability.py",
+      "evidence": ""
+    },
+    {
+      "id": "F039",
+      "title": "[MVP] Prove multi-workspace data isolation",
+      "behavior": "E2E создаёт workspace A и B под одним Demo Owner, загружает разные знания и доказывает, что query A не возвращает B и наоборот. Проверяется actual isolation PostgreSQL/LightRAG/Qdrant/Neo4j независимо от user ACL.",
+      "state": "not started",
+      "depends_on": [
+        "F030",
+        "F038"
+      ],
+      "verification": "pytest -q tests/e2e/test_workspace_data_isolation.py",
+      "evidence": ""
+    },
+    {
+      "id": "F040",
+      "title": "[MVP] Add parser and index schema versioning",
+      "behavior": "Workspace хранит index_schema_version и embedding profile identity; revisions фиксируют parser/chunk/index versions. Несовместимое изменение помечает данные requiring reindex вместо смешивания несовместимых индексов.",
+      "state": "not started",
+      "depends_on": [
+        "F027",
+        "F037"
+      ],
+      "verification": "pytest -q tests/unit/indexing/test_schema_version.py tests/integration/test_index_versioning.py",
+      "evidence": ""
+    },
+    {
+      "id": "F041",
+      "title": "[MVP] Implement durable workspace reindex",
+      "behavior": "Maintenance operation создаёт durable jobs и перестраивает derived indexes из PostgreSQL metadata и MinIO revisions. Reindex переживает restart и не требует повторной загрузки originals.",
+      "state": "not started",
+      "depends_on": [
+        "F035",
+        "F040"
+      ],
+      "verification": "pytest -q tests/unit/maintenance/test_reindex.py tests/e2e/test_workspace_reindex.py",
+      "evidence": ""
+    },
+    {
+      "id": "F042",
+      "title": "[MVP] Verify full single-owner lifecycle and persistence",
+      "behavior": "Full-stack E2E выполняет create, READY, unchanged upsert, changed revision, query v2, delete, restart stack и повторную проверку persisted source-of-truth state. Security остаётся demo_owner и не участвует в критерии успешности.",
+      "state": "not started",
+      "depends_on": [
+        "F033",
+        "F035",
+        "F039",
+        "F041"
+      ],
+      "verification": "pytest -q tests/e2e/test_mvp_lifecycle.py tests/e2e/test_full_stack_restart.py",
+      "evidence": ""
+    },
+    {
+      "id": "F043",
+      "title": "[POST-MVP] Introduce persisted principals",
+      "behavior": "Добавляются principals с USER/SERVICE_ACCOUNT, external subject, status и timestamps. DemoOwner runtime identity остаётся отдельным mode и не требует auto-creation production principals.",
+      "state": "not started",
+      "depends_on": [
+        "F042"
+      ],
+      "verification": "pytest -q tests/unit/security/test_principals.py tests/integration/test_principal_schema.py",
+      "evidence": ""
+    },
+    {
+      "id": "F044",
+      "title": "[POST-MVP] Define centralized RBAC permission policy",
+      "behavior": "Определяется единая versioned policy roles reader/writer/admin/owner -> workspace/query/document/member/index permissions. Endpoint-код не содержит дублированных role checks.",
+      "state": "not started",
+      "depends_on": [
+        "F043"
+      ],
+      "verification": "pytest -q tests/unit/security/test_rbac_policy.py",
+      "evidence": ""
+    },
+    {
+      "id": "F045",
+      "title": "[POST-MVP] Persist workspace membership and ACL",
+      "behavior": "Создаётся workspace_members с unique workspace/principal assignment и validated role. Repository вычисляет effective permissions только для active principals/workspaces через policy F044.",
+      "state": "not started",
+      "depends_on": [
+        "F044"
+      ],
+      "verification": "pytest -q tests/unit/security/test_acl_repository.py tests/integration/test_workspace_acl_postgres.py",
+      "evidence": ""
+    },
+    {
+      "id": "F046",
+      "title": "[POST-MVP] Authenticate through OIDC JWT",
+      "behavior": "Реализуется OIDCIdentityResolver: Bearer JWT signature/issuer/audience/expiration/subject validation, bounded JWKS cache и exact active-principal resolution. Нет неявного fallback из oidc в demo_owner.",
+      "state": "not started",
+      "depends_on": [
+        "F043"
+      ],
+      "verification": "pytest -q tests/unit/security/test_oidc.py tests/integration/test_auth_http.py",
+      "evidence": ""
+    },
+    {
+      "id": "F047",
+      "title": "[POST-MVP] Implement production RBAC workspace access policy",
+      "behavior": "RBACWorkspaceAccessPolicy заменяет DemoOwnerAccessPolicy в oidc mode и создаёт тот же AuthorizedWorkspaceContext после membership/permission checks. Document/query/indexing domain services не изменяются.",
+      "state": "not started",
+      "depends_on": [
+        "F045",
+        "F046"
+      ],
+      "verification": "pytest -q tests/unit/security/test_workspace_context.py tests/integration/test_oidc_rbac_context.py",
+      "evidence": ""
+    },
+    {
+      "id": "F048",
+      "title": "[POST-MVP] Support service-account principals",
+      "behavior": "SERVICE_ACCOUNT проходит тот же OIDC/client-credentials identity resolution и ACL path, что USER. Собственные бессрочные application API keys не вводятся как основной механизм.",
+      "state": "not started",
+      "depends_on": [
+        "F047"
+      ],
+      "verification": "pytest -q tests/unit/security/test_service_accounts.py tests/integration/test_service_account_acl.py",
+      "evidence": ""
+    },
+    {
+      "id": "F049",
+      "title": "[POST-MVP] Expose workspace member management API",
+      "behavior": "Добавляются GET/POST/PATCH/DELETE /v1/workspaces/{id}/members. Операции gated members.read/members.manage и недоступны через DemoOwner-only public contract без явного feature enablement.",
+      "state": "not started",
+      "depends_on": [
+        "F047"
+      ],
+      "verification": "pytest -q tests/unit/api/test_workspace_members.py tests/integration/test_workspace_members_api.py",
+      "evidence": ""
+    },
+    {
+      "id": "F050",
+      "title": "[POST-MVP] Prove authorization isolation end-to-end",
+      "behavior": "E2E проверяет reader/writer/admin/owner restrictions, disabled principal denial и отсутствие cross-workspace доступа без membership. Graph RAG functionality должна совпадать с Demo/MVP при наличии разрешения.",
+      "state": "not started",
+      "depends_on": [
+        "F048",
+        "F049"
+      ],
+      "verification": "pytest -q tests/e2e/test_workspace_authorization.py",
+      "evidence": ""
+    },
+    {
+      "id": "F051",
+      "title": "[POST-MVP] Persist immutable audit events",
+      "behavior": "Создаётся append-only audit_events с principal, workspace, action, resource, result, request_id, timestamp и safe metadata. Repository не предоставляет обычный update/delete для existing events.",
+      "state": "not started",
+      "depends_on": [
+        "F047"
+      ],
+      "verification": "pytest -q tests/unit/audit tests/integration/test_audit_postgres.py",
+      "evidence": ""
+    },
+    {
+      "id": "F052",
+      "title": "[POST-MVP] Complete audit coverage for sensitive actions",
+      "behavior": "Audit events создаются для auth failures, member changes, workspace changes, document create/update/delete, reindex и query metadata. Raw query text и полный document content не сохраняются по умолчанию.",
+      "state": "not started",
+      "depends_on": [
+        "F050",
+        "F051"
+      ],
+      "verification": "pytest -q tests/unit/audit/test_policy.py tests/integration/test_audit_coverage.py",
+      "evidence": ""
+    },
+    {
+      "id": "F053",
+      "title": "[POST-MVP] Harden internal network boundaries",
+      "behavior": "Во внешнюю сеть публикуется только rag-api и при необходимости IdP. PostgreSQL, MinIO, Qdrant, Neo4j, rag-worker и vLLM остаются internal-only. Automated test проверяет published ports.",
+      "state": "not started",
+      "depends_on": [
+        "F042",
+        "F050"
+      ],
+      "verification": "pytest -q tests/integration/test_network_boundaries.py",
+      "evidence": ""
+    },
+    {
+      "id": "F054",
+      "title": "[POST-MVP] Harden secrets and configurable endpoint policy",
+      "behavior": "Secrets не попадают в git/config responses/audit/logs. Настраиваемые OpenAI-compatible endpoints проходят URL validation/egress policy, исключающую произвольный доступ к внутренним адресам.",
+      "state": "not started",
+      "depends_on": [
+        "F019",
+        "F053"
+      ],
+      "verification": "pytest -q tests/unit/security/test_secrets.py tests/unit/security/test_endpoint_policy.py",
+      "evidence": ""
+    },
+    {
+      "id": "F055",
+      "title": "[POST-MVP] Add OpenTelemetry metrics and tracing",
+      "behavior": "HTTP, jobs, retrieval, embeddings и LLM calls instrumentируются OpenTelemetry. request_id/trace_id связывают API request с worker и downstream calls. Integration test использует local collector.",
+      "state": "not started",
+      "depends_on": [
+        "F029",
+        "F042"
+      ],
+      "verification": "pytest -q tests/unit/observability/test_otel.py tests/integration/test_otel_pipeline.py",
+      "evidence": ""
+    },
+    {
+      "id": "F056",
+      "title": "[POST-MVP] Introduce MCP-ready domain facade",
+      "behavior": "Выделяются application methods list_workspaces, query_workspace, list_documents, upsert_document, delete_document и get_job_status. REST использует тот же facade; facade принимает AuthorizedWorkspaceContext и не раскрывает storage clients.",
+      "state": "not started",
+      "depends_on": [
+        "F047",
+        "F042"
+      ],
+      "verification": "pytest -q tests/unit/application/test_domain_facade.py",
+      "evidence": ""
+    },
+    {
+      "id": "F057",
+      "title": "[POST-MVP] Verify disaster-recovery rebuild from source of truth",
+      "behavior": "E2E очищает derived Qdrant/Neo4j data и выполняет reindex из PostgreSQL metadata и MinIO revisions. После rebuild Graph RAG снова отвечает по исходным документам.",
+      "state": "not started",
+      "depends_on": [
+        "F041",
+        "F053"
+      ],
+      "verification": "pytest -q tests/e2e/test_disaster_recovery_reindex.py",
+      "evidence": ""
+    },
+    {
+      "id": "F058",
+      "title": "[POST-MVP] Add Kubernetes-readiness runtime contracts",
+      "behavior": "Добавляются /health/ready semantics, SIGTERM/graceful shutdown, configurable replicas/worker concurrency и запрет critical local-filesystem state. Helm chart не входит в задачу.",
+      "state": "not started",
+      "depends_on": [
+        "F055"
+      ],
+      "verification": "pytest -q tests/unit/runtime tests/integration/test_readiness_and_shutdown.py",
+      "evidence": ""
+    },
+    {
+      "id": "F059",
+      "title": "[POST-MVP] Establish final regression gate and synchronize documentation",
+      "behavior": "Финальный scripts/verify.sh объединяет lint/typecheck, unit, integration, MVP E2E и security suites; GPU tests остаются отдельным profile. architecture.md, README и operational docs описывают DemoOwner, OIDC/RBAC migration, backup/recovery, logging, observability и deployment boundaries.",
+      "state": "not started",
+      "depends_on": [
+        "F052",
+        "F054",
+        "F056",
+        "F057",
+        "F058"
+      ],
+      "verification": "./scripts/verify.sh",
+      "evidence": ""
+    }
+  ]
+}

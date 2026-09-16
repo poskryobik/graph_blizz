@@ -1,0 +1,82 @@
+# Graph Blizz
+
+Минимальный backend Graph RAG приложения на FastAPI.
+
+## Установка и запуск
+
+```bash
+uv sync --dev
+uv run uvicorn backend.app:app --reload
+```
+
+Для запуска текущего Demo-контура с PostgreSQL:
+
+```bash
+docker compose up -d --build --wait
+```
+
+Оба сервиса находятся в изолированной internal-сети, PostgreSQL не публикует
+порт на host, а `rag-api` доступен на порту `GRAPH_BLIZZ_API_PORT` (по умолчанию
+`8000`). Данные сохраняются в named volume `postgres_data`. Compose
+использует только локальный demo-пароль по умолчанию; его можно заменить через
+`GRAPH_BLIZZ_POSTGRES__PASSWORD` в локальном `.env`. Остановка без `--volumes`
+сохраняет данные, а `docker compose down --volumes` удаляет их.
+
+## Проверки
+
+Ruff, mypy и pytest устанавливаются в проектное окружение командой `uv sync --dev`.
+Проверки разделены pytest-маркерами `unit`, `integration` и `e2e`. Запустить
+отдельную группу или весь pipeline можно из любого рабочего каталога:
+
+```bash
+./scripts/lint.sh
+./scripts/typecheck.sh
+./scripts/verify-unit.sh
+./scripts/verify-integration.sh
+./scripts/verify-e2e.sh
+./scripts/verify.sh
+```
+
+`lint.sh` запускает Ruff lint и format check, а `typecheck.sh` — mypy в gradual
+режиме. Общий pipeline выполняет обе проверки перед тестами. Каждый test runner
+выбирает только свой каталог и marker. При падении любой проверки её runner и
+общий pipeline завершаются с ненулевым кодом.
+
+## Health API
+
+`GET /health/live` возвращает `{"status":"healthy"}` без обращения к внешним
+сервисам. `GET /health/ready` выполняет `SELECT 1` в PostgreSQL и возвращает
+`{"status":"ready"}` с HTTP 200 либо `{"status":"unready"}` с HTTP 503.
+
+## Конфигурация
+
+Настройки загружаются из переменных с префиксом `GRAPH_BLIZZ_`; вложенные поля
+разделяются двойным подчёркиванием. Например,
+`GRAPH_BLIZZ_POSTGRES__HOST=postgres`. Полный локальный шаблон находится в
+`.env.example`; его можно скопировать в `.env`, которую приложение загружает при
+старте.
+
+По умолчанию приложение запускается в `development` с явным режимом
+`GRAPH_BLIZZ_AUTH__MODE=demo_owner` и не подключается к внешним сервисам при
+создании FastAPI application. Для `production` режим `demo_owner`, отсутствующие,
+короткие и placeholder-секреты отклоняются при загрузке. Секреты следует
+генерировать или передавать через secret manager, не добавляя их в репозиторий.
+
+## Operational logging
+
+Приложение настраивает logger `graph_blizz` при создании FastAPI application.
+Формат по умолчанию — JSON; уровень, формат и имя сервиса задаются через
+`GRAPH_BLIZZ_LOGGING__LEVEL`, `GRAPH_BLIZZ_LOGGING__FORMAT` и
+`GRAPH_BLIZZ_LOGGING__SERVICE_NAME`. Контекст операции может содержать
+`request_id`, `workspace_id`, `document_id`, `operation`, `duration_ms` и
+`result`. JSON formatter пропускает только эти поля, типизированные имена событий
+`OperationalEvent` и явно разрешённые operational extras. Произвольные message,
+mapping, exception text и неизвестные extra-поля не пересекают logging boundary;
+credentials, Authorization, document content, embeddings, prompts и полные model
+responses никогда не логируются. Решение и его ограничения зафиксированы в
+[ADR 0001](docs/architecture/decisions/0001-safe-operational-logging-boundary.md).
+
+## Архитектурные решения
+
+- [ADR 0001: allow-list boundary для operational logging](docs/architecture/decisions/0001-safe-operational-logging-boundary.md)
+- [ADR 0002: PostgreSQL readiness в Docker Compose](docs/architecture/decisions/0002-postgresql-compose-readiness.md)

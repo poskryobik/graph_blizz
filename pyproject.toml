@@ -1,0 +1,39 @@
+[project]
+name = "graph-blizz"
+version = "0.1.0"
+description = "Graph RAG application"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.116,<1",
+    "psycopg[binary]>=3.2,<4",
+    "pydantic-settings>=2.10,<3",
+    "uvicorn>=0.35,<1",
+]
+
+[dependency-groups]
+dev = [
+    "httpx2>=2,<3",
+    "mypy>=1.18,<2",
+    "pytest>=8.4,<9",
+    "ruff>=0.13,<1",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+addopts = ["--strict-markers"]
+pythonpath = ["."]
+testpaths = ["tests"]
+markers = [
+    "unit: fast tests without external services",
+    "integration: tests of component and service integration",
+    "e2e: end-to-end user workflow tests",
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = false
+disallow_untyped_defs = false
+check_untyped_defs = false
