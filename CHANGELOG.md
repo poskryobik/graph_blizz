@@ -9,6 +9,7 @@
 
 ### Added
 
+- Добавлен internal-only Neo4j с persistent volume, реальным healthcheck и внутренним connectivity adapter без нового публичного application API.
 - Добавлен Qdrant с persistent volume, web-доступом и внутренним connectivity adapter без нового публичного application API.
 - Добавлены типизированные plain text и Markdown parsers с immutable результатами и registry для MIME types и расширений Demo.
 - Добавлен доступ с host к Swagger UI, ReDoc, MinIO S3 API и web Console через настраиваемые Compose-порты; PostgreSQL остаётся internal-only.

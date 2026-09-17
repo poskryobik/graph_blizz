@@ -1,4 +1,23 @@
 services:
+  neo4j:
+    image: neo4j:2025.07.1-community
+    environment:
+      NEO4J_AUTH: neo4j/${GRAPH_BLIZZ_NEO4J__PASSWORD:-graph-blizz-demo-password}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          cypher-shell -u "$${NEO4J_AUTH%%/*}" -p "$${NEO4J_AUTH#*/}"
+          "RETURN 1"
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    volumes:
+      - neo4j_data:/data
+    networks:
+      - backend
+
   qdrant:
     image: qdrant/qdrant:v1.15.4
     healthcheck:
@@ -65,6 +84,8 @@ services:
     depends_on:
       minio:
         condition: service_healthy
+      neo4j:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       qdrant:
@@ -83,6 +104,9 @@ services:
       GRAPH_BLIZZ_MINIO__BUCKET: graph-blizz
       GRAPH_BLIZZ_MINIO__ACCESS_KEY: ${GRAPH_BLIZZ_MINIO__ACCESS_KEY:-graph-blizz-demo}
       GRAPH_BLIZZ_MINIO__SECRET_KEY: ${GRAPH_BLIZZ_MINIO__SECRET_KEY:-graph-blizz-demo-password}
+      GRAPH_BLIZZ_NEO4J__URI: bolt://neo4j:7687
+      GRAPH_BLIZZ_NEO4J__USERNAME: neo4j
+      GRAPH_BLIZZ_NEO4J__PASSWORD: ${GRAPH_BLIZZ_NEO4J__PASSWORD:-graph-blizz-demo-password}
       GRAPH_BLIZZ_QDRANT__URL: http://qdrant:6333
     ports:
       - "${GRAPH_BLIZZ_API_PORT:-8000}:8000"
@@ -102,6 +126,7 @@ services:
 
 volumes:
   minio_data:
+  neo4j_data:
   postgres_data:
   qdrant_data:
 

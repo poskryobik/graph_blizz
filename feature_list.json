@@ -172,12 +172,12 @@
       "id": "F016",
       "title": "[DEMO] Bootstrap Neo4j",
       "behavior": "В Docker Compose добавляется Neo4j с healthcheck и persistent volume. Проверяются connection и persistence. Neo4j не является публичной application boundary.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F006"
       ],
       "verification": "pytest -q tests/integration/test_neo4j_bootstrap.py",
-      "evidence": ""
+      "evidence": "UV_CACHE_DIR=/tmp/graph-rag-uv-cache uv run --frozen pytest -q tests/integration/test_neo4j_bootstrap.py: 1 passed on real Neo4j; authenticated Bolt connection and named-volume persistence survived forced container recreation; independent verification confirmed authenticated cypher-shell readiness, internal-only network boundary, adapter lifecycle/error mapping and absence of a public application route; ./scripts/verify.sh passed lint, format, mypy, 155 unit tests and integration suite (3 passed, 10 skipped)"
     },
     {
       "id": "F017",
@@ -215,7 +215,7 @@
     {
       "id": "F020",
       "title": "[DEMO] Wire LightRAG Core to storages and model clients",
-      "behavior": "Добавляется pinned LightRAG Core dependency. LightRAG настраивается на PostgreSQL-backed internal storage, Qdrant, Neo4j, embedding client и external LLM. Публичный LightRAG server не используется. Integration test доказывает минимальный insert/query на реальных storage.",
+      "behavior": "Добавляется pinned LightRAG Core dependency. LightRAG настраивается на PostgreSQL-backed internal storage, Qdrant, Neo4j, embedding client и external LLM. Integration test доказывает минимальный insert/query на реальных storage.",
       "state": "not started",
       "depends_on": [
         "F015",

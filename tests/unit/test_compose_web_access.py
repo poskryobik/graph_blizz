@@ -42,6 +42,19 @@ def test_postgres_remains_internal_only() -> None:
     assert "host_access" not in postgres
 
 
+def test_neo4j_is_persistent_healthy_and_internal_only() -> None:
+    neo4j = service_definition("neo4j")
+
+    assert "image: neo4j:2025.07.1-community" in neo4j
+    assert "      - neo4j_data:/data" in neo4j
+    assert "healthcheck:" in neo4j
+    assert "cypher-shell" in neo4j
+    assert '"RETURN 1"' in neo4j
+    assert "ports:" not in neo4j
+    assert "      - backend" in neo4j
+    assert "host_access" not in neo4j
+
+
 def test_qdrant_publishes_configurable_web_port() -> None:
     qdrant = service_definition("qdrant")
 

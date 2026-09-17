@@ -9,13 +9,14 @@ uv sync --dev
 uv run uvicorn backend.app:app --reload
 ```
 
-Для запуска текущего Demo-контура с PostgreSQL, MinIO и Qdrant:
+Для запуска текущего Demo-контура с PostgreSQL, MinIO, Qdrant и Neo4j:
 
 ```bash
 docker compose up -d --build --wait
 ```
 
-PostgreSQL остаётся доступен только сервисам в изолированной internal-сети.
+PostgreSQL и Neo4j остаются доступны только сервисам в изолированной
+internal-сети.
 Web-интерфейсы доступны с host по следующим адресам:
 
 - API: `http://localhost:8000`, Swagger UI: `http://localhost:8000/docs`, ReDoc: `http://localhost:8000/redoc`;
@@ -28,10 +29,11 @@ Host-порты можно переопределить через `GRAPH_BLIZZ_
 `GRAPH_BLIZZ_QDRANT_PORT` соответственно.
 Например, `GRAPH_BLIZZ_API_PORT=8080 docker compose up -d --build --wait`
 опубликует Swagger UI по адресу `http://localhost:8080/docs`. Данные сохраняются
-в named volumes `postgres_data`, `minio_data` и `qdrant_data`. Compose использует только
+в named volumes `postgres_data`, `minio_data`, `qdrant_data` и `neo4j_data`. Compose использует только
 локальные demo-секреты по умолчанию; их
 можно заменить через `GRAPH_BLIZZ_POSTGRES__PASSWORD`,
-`GRAPH_BLIZZ_MINIO__ACCESS_KEY` и `GRAPH_BLIZZ_MINIO__SECRET_KEY` в локальном
+`GRAPH_BLIZZ_MINIO__ACCESS_KEY`, `GRAPH_BLIZZ_MINIO__SECRET_KEY` и
+`GRAPH_BLIZZ_NEO4J__PASSWORD` в локальном
 `.env`. Остановка без `--volumes` сохраняет данные, а
 `docker compose down --volumes` удаляет их.
 
@@ -46,6 +48,11 @@ Qdrant доступен приложению по `http://qdrant:6333`. Внут
 `backend.storage.QdrantConnectivity` проверяет соединение и явно закрывает
 официальный client; отдельный публичный application endpoint для Qdrant не
 предоставляется.
+
+Neo4j доступен приложению по `bolt://neo4j:7687`. Внутренний adapter
+`backend.storage.Neo4jConnectivity` проверяет Bolt-соединение и явно закрывает
+официальный driver. Сервис не публикует host-порты и отдельный публичный
+application endpoint для Neo4j не предоставляется.
 
 ## Проверки
 
@@ -142,3 +149,4 @@ responses никогда не логируются. Решение и его о�
 - [ADR 0005: MinIO через S3-совместимый ObjectStorage adapter](docs/architecture/decisions/0005-minio-object-storage-adapter.md)
 - [ADR 0006: базовая граница парсеров для Demo](docs/architecture/decisions/0006-demo-parser-boundary.md)
 - [ADR 0007: Qdrant connectivity boundary](docs/architecture/decisions/0007-qdrant-connectivity-boundary.md)
+- [ADR 0008: Neo4j connectivity boundary](docs/architecture/decisions/0008-neo4j-connectivity-boundary.md)
