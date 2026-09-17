@@ -126,13 +126,13 @@
       "id": "F012",
       "title": "[DEMO] Persist minimal document registry",
       "behavior": "Создаётся таблица documents: id, workspace_id, source_key, filename, source_type, object_uri, content_hash, status, timestamps. Статусы Demo: UPLOADED, INDEXING, READY, FAILED. Revisions и update/delete пока не реализуются.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F007",
         "F008"
       ],
       "verification": "pytest -q tests/unit/documents/test_registry.py tests/integration/test_document_schema.py",
-      "evidence": ""
+      "evidence": "UV_CACHE_DIR=/tmp/graph-rag-uv-cache uv run --frozen pytest -q tests/unit/documents/test_registry.py tests/integration/test_document_schema.py: 6 passed on real PostgreSQL; workspace-scoped create/get/list, schema constraints and four Demo statuses independently verified; ./scripts/verify.sh passed lint, format, mypy, 100 unit tests and 10 integration tests"
     },
     {
       "id": "F013",
