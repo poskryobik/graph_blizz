@@ -6,7 +6,7 @@ readonly PROJECT_ROOT="$(dirname -- "${SCRIPT_DIR}")"
 
 cd -- "${PROJECT_ROOT}"
 set +e
-uv run --frozen --no-cache pytest -q -m integration tests/integration
+uv run --frozen --no-cache pytest -q -m "integration and not gpu" tests/integration
 readonly status=$?
 set -e
 

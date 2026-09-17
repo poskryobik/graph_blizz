@@ -9,6 +9,7 @@
 
 ### Added
 
+- Добавлен opt-in GPU Compose profile с vLLM endpoint `/v1/embeddings`, точной Giga Embeddings model, постоянным Hugging Face cache и раздельными host/container URL; обычный CI проверяет контракт без GPU.
 - Добавлен internal-only Neo4j с persistent volume, реальным healthcheck и внутренним connectivity adapter без нового публичного application API.
 - Добавлен Qdrant с persistent volume, web-доступом и внутренним connectivity adapter без нового публичного application API.
 - Добавлены типизированные plain text и Markdown parsers с immutable результатами и registry для MIME types и расширений Demo.

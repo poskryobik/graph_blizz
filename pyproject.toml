@@ -35,6 +35,7 @@ markers = [
     "unit: fast tests without external services",
     "integration: tests of component and service integration",
     "e2e: end-to-end user workflow tests",
+    "gpu: tests requiring explicitly enabled GPU infrastructure",
 ]
 
 [tool.mypy]

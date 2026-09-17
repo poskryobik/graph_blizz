@@ -10,7 +10,7 @@ pytestmark = pytest.mark.unit
 PROJECT_ROOT = Path(__file__).parents[2]
 RUNNERS = [
     ("verify-unit.sh", "unit", "tests/unit"),
-    ("verify-integration.sh", "integration", "tests/integration"),
+    ("verify-integration.sh", "integration and not gpu", "tests/integration"),
     ("verify-e2e.sh", "e2e", "tests/e2e"),
 ]
 
@@ -113,10 +113,11 @@ def prepare_aggregate(tmp_path: Path, failing_check: str | None = None) -> Path:
             f'printf "%s\\n" "{check}" >> "${{TRACE_FILE}}"\nexit {exit_code}\n',
         )
     for script, marker, _suite in RUNNERS:
-        exit_code = 7 if marker == failing_check else 0
+        group = marker.split()[0]
+        exit_code = 7 if group == failing_check else 0
         write_executable(
             tmp_path / script,
-            f'printf "%s\\n" "{marker}" >> "${{TRACE_FILE}}"\nexit {exit_code}\n',
+            f'printf "%s\\n" "{group}" >> "${{TRACE_FILE}}"\nexit {exit_code}\n',
         )
     return aggregate
 

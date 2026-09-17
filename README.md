@@ -37,6 +37,41 @@ Host-порты можно переопределить через `GRAPH_BLIZZ_
 `.env`. Остановка без `--volumes` сохраняет данные, а
 `docker compose down --volumes` удаляет их.
 
+### GPU embeddings через vLLM
+
+GPU-сервис не входит в обычный `docker compose up`: он запускается только через
+profile `gpu` и предоставляет OpenAI-compatible endpoint
+`POST http://localhost:8001/v1/embeddings`:
+
+```bash
+docker compose --profile gpu up -d vllm-embeddings
+curl http://localhost:8001/v1/embeddings \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"ai-sage/Giga-Embeddings-instruct-480M-0826","input":["Граф знаний"]}'
+```
+
+Нужны NVIDIA GPU, рабочий NVIDIA Container Toolkit и доступ к Hugging Face при
+первой загрузке. Модель строго зафиксирована как
+`ai-sage/Giga-Embeddings-instruct-480M-0826`, а загруженные файлы сохраняются в
+named volume `huggingface_cache`. Host-порт задаётся через
+`GRAPH_BLIZZ_EMBEDDING_PORT` (по умолчанию `8001`), а host endpoint для тестов и
+клиентов — через `GRAPH_BLIZZ_EMBEDDING_HOST_BASE_URL`. Внутри Compose
+`rag-api` использует `http://vllm-embeddings:8000/v1`; его можно переопределить
+только отдельной переменной `GRAPH_BLIZZ_COMPOSE_EMBEDDING_BASE_URL`.
+Для локального запуска приложения вне Compose передайте этот host endpoint в
+`GRAPH_BLIZZ_EMBEDDING__BASE_URL`.
+
+Реальная GPU-проверка отделена от обычного CI и запускается явно после готовности
+сервиса:
+
+```bash
+GRAPH_BLIZZ_RUN_GPU_TESTS=1 uv run --frozen pytest -q \
+  -m gpu tests/integration/test_vllm_embeddings.py
+```
+
+Обычные unit-тесты проверяют Compose и OpenAI API contract через локальный stub,
+а `verify-integration.sh` исключает marker `gpu`.
+
 MinIO доступен приложению по `http://minio:9000`. Runtime adapter
 `backend.storage.ObjectStore` выполняет S3-совместимые `put/get/delete`; bucket
 `GRAPH_BLIZZ_MINIO__BUCKET` должен быть создан при bootstrap окружения.

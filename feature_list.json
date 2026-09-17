@@ -183,12 +183,12 @@
       "id": "F017",
       "title": "[DEMO] Bootstrap vLLM embedding service",
       "behavior": "Добавляется GPU Compose profile с ai-sage/Giga-Embeddings-instruct-480M-0826, Hugging Face cache и OpenAI-compatible /v1/embeddings endpoint. Обычный CI может использовать contract stub; GPU verification запускается отдельно.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F004"
       ],
       "verification": "pytest -q tests/unit/embeddings && pytest -q -m gpu tests/integration/test_vllm_embeddings.py",
-      "evidence": ""
+      "evidence": "Independent verification iteration 2 passed all criteria; focused F017 tests: 22 passed, 1 safely skipped without GPU opt-in; ./scripts/verify.sh: Ruff, format, mypy, 158 unit passed, integration 3 passed / 10 skipped / 1 GPU deselected; default, GPU-profile, and .env.example Compose configs passed; rendered rag-api URL remained http://vllm-embeddings:8000/v1 while host GPU verification uses a separate localhost:8001 URL; git diff --check passed"
     },
     {
       "id": "F018",

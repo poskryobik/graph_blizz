@@ -78,6 +78,35 @@ services:
     networks:
       - backend
 
+  vllm-embeddings:
+    profiles: ["gpu"]
+    image: vllm/vllm-openai:v0.10.2
+    command:
+      - --model
+      - ai-sage/Giga-Embeddings-instruct-480M-0826
+      - --task
+      - embed
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      - --trust-remote-code
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    ports:
+      - "${GRAPH_BLIZZ_EMBEDDING_PORT:-8001}:8000"
+    volumes:
+      - huggingface_cache:/root/.cache/huggingface
+    networks:
+      - backend
+      - host_access
+
   rag-api:
     build:
       context: .
@@ -108,6 +137,8 @@ services:
       GRAPH_BLIZZ_NEO4J__USERNAME: neo4j
       GRAPH_BLIZZ_NEO4J__PASSWORD: ${GRAPH_BLIZZ_NEO4J__PASSWORD:-graph-blizz-demo-password}
       GRAPH_BLIZZ_QDRANT__URL: http://qdrant:6333
+      GRAPH_BLIZZ_EMBEDDING__BASE_URL: ${GRAPH_BLIZZ_COMPOSE_EMBEDDING_BASE_URL:-http://vllm-embeddings:8000/v1}
+      GRAPH_BLIZZ_EMBEDDING__MODEL: ai-sage/Giga-Embeddings-instruct-480M-0826
     ports:
       - "${GRAPH_BLIZZ_API_PORT:-8000}:8000"
     healthcheck:
@@ -125,6 +156,7 @@ services:
       - host_access
 
 volumes:
+  huggingface_cache:
   minio_data:
   neo4j_data:
   postgres_data:
