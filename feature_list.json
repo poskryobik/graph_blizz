@@ -103,13 +103,13 @@
       "id": "F010",
       "title": "[DEMO] Expose owner-only workspace API",
       "behavior": "Реализуются POST/GET workspace endpoints. Они получают AuthorizedWorkspaceContext через DemoOwner adapter и работают без JWT, users и workspace_members. storage_key никогда не принимается от клиента и не раскрывается как mutable field.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F008",
         "F009"
       ],
       "verification": "pytest -q tests/unit/api/test_workspaces_demo.py tests/integration/test_workspace_api_demo.py",
-      "evidence": ""
+      "evidence": "uv run --frozen pytest -q tests/unit/api/test_workspaces_demo.py tests/integration/test_workspace_api_demo.py: 5 passed; independent runtime/static audit confirmed POST/GET behavior, DemoOwner permission enforcement, credential-free operation, rejection and non-disclosure of storage_key; ./scripts/verify.sh passed lint, format, mypy, 90 unit tests and 3 integration tests"
     },
     {
       "id": "F011",

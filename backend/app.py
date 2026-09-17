@@ -3,6 +3,7 @@
 from fastapi import FastAPI, status
 from fastapi.responses import JSONResponse
 
+from backend.api import workspaces_router
 from backend.config import ApplicationSettings, AuthMode
 from backend.observability import configure_logging
 from backend.postgres import postgres_is_ready
@@ -32,6 +33,7 @@ def create_app(settings: ApplicationSettings | None = None) -> FastAPI:
     application.state.workspace_access_policy = DemoOwnerAccessPolicy(
         resolved_settings.auth.demo_owner_id
     )
+    application.include_router(workspaces_router)
 
     @application.get("/health/live")
     async def liveness() -> dict[str, str]:

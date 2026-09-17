@@ -71,6 +71,14 @@ permissions и связывает операции с server-resolved workspace 
 memberships, RBAC или ACL. Другие auth modes не имеют неявного fallback в
 `demo_owner`.
 
+## Workspace API
+
+В режиме `demo_owner` workspace создаётся запросом `POST /workspaces` с JSON-полями
+`name` и `slug`, а читается по UUID через `GET /workspaces/{workspace_id}`. Оба
+endpoint работают без `Authorization` header и перед доступом получают
+workspace-контекст через `DemoOwnerAccessPolicy`. Поле `storage_key` создаётся
+сервером, не принимается в запросе и не возвращается публичным API.
+
 ## Миграции PostgreSQL
 
 Application metadata хранится в отдельной схеме `graph_blizz`, которой управляет
