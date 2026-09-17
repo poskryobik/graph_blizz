@@ -9,6 +9,7 @@
 
 ### Added
 
+- Добавлены MinIO с persistent volume и S3-совместимый adapter `put/get/delete` для хранения объектов.
 - Добавлены owner-only `POST /workspaces` и `GET /workspaces/{workspace_id}` через DemoOwner security boundary без клиентского доступа к `storage_key`.
 - Добавлена заменяемая security boundary и `demo_owner` режим без `Authorization`, IdP и RBAC/ACL tables.
 - Добавлено постоянное хранение workspace с серверным неизменяемым `storage_key` и операциями create/read/rename.

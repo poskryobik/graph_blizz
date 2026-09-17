@@ -9,18 +9,24 @@ uv sync --dev
 uv run uvicorn backend.app:app --reload
 ```
 
-Для запуска текущего Demo-контура с PostgreSQL:
+Для запуска текущего Demo-контура с PostgreSQL и MinIO:
 
 ```bash
 docker compose up -d --build --wait
 ```
 
-Оба сервиса находятся в изолированной internal-сети, PostgreSQL не публикует
-порт на host, а `rag-api` доступен на порту `GRAPH_BLIZZ_API_PORT` (по умолчанию
-`8000`). Данные сохраняются в named volume `postgres_data`. Compose
-использует только локальный demo-пароль по умолчанию; его можно заменить через
-`GRAPH_BLIZZ_POSTGRES__PASSWORD` в локальном `.env`. Остановка без `--volumes`
-сохраняет данные, а `docker compose down --volumes` удаляет их.
+Все сервисы находятся в изолированной internal-сети, PostgreSQL и MinIO не
+публикуют порты на host, а `rag-api` доступен на порту `GRAPH_BLIZZ_API_PORT`
+(по умолчанию `8000`). Данные сохраняются в named volumes `postgres_data` и
+`minio_data`. Compose использует только локальные demo-секреты по умолчанию; их
+можно заменить через `GRAPH_BLIZZ_POSTGRES__PASSWORD`,
+`GRAPH_BLIZZ_MINIO__ACCESS_KEY` и `GRAPH_BLIZZ_MINIO__SECRET_KEY` в локальном
+`.env`. Остановка без `--volumes` сохраняет данные, а
+`docker compose down --volumes` удаляет их.
+
+MinIO доступен приложению по `http://minio:9000`. Runtime adapter
+`backend.storage.ObjectStore` выполняет S3-совместимые `put/get/delete`; bucket
+`GRAPH_BLIZZ_MINIO__BUCKET` должен быть создан при bootstrap окружения.
 
 ## Проверки
 
@@ -114,3 +120,4 @@ responses никогда не логируются. Решение и его о�
 - [ADR 0002: PostgreSQL readiness в Docker Compose](docs/architecture/decisions/0002-postgresql-compose-readiness.md)
 - [ADR 0003: версионируемые миграции PostgreSQL через Alembic](docs/architecture/decisions/0003-versioned-postgresql-migrations.md)
 - [ADR 0004: security boundary и DemoOwner adapter](docs/architecture/decisions/0004-demo-owner-security-boundary.md)
+- [ADR 0005: MinIO через S3-совместимый ObjectStorage adapter](docs/architecture/decisions/0005-minio-object-storage-adapter.md)

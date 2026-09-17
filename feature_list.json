@@ -115,12 +115,12 @@
       "id": "F011",
       "title": "[DEMO] Bootstrap MinIO object storage",
       "behavior": "В Docker Compose добавляется MinIO с persistent volume и healthcheck. Реализуется минимальный ObjectStorage adapter put/get/delete. Проверяется persistence после restart.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F006"
       ],
       "verification": "pytest -q tests/unit/storage/test_object_store.py tests/integration/test_minio.py",
-      "evidence": ""
+      "evidence": "UV_CACHE_DIR=/tmp/graph-rag-uv-cache uv run --frozen pytest -q tests/unit/storage/test_object_store.py tests/integration/test_minio.py: 7 passed on real MinIO; persistence survived stop and force-recreate with the named volume; ./scripts/verify.sh passed lint, format, mypy, 96 unit tests and 8 integration tests"
     },
     {
       "id": "F012",
