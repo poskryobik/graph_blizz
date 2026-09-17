@@ -9,6 +9,7 @@
 
 ### Added
 
+- Добавлена заменяемая security boundary и `demo_owner` режим без `Authorization`, IdP и RBAC/ACL tables.
 - Добавлено постоянное хранение workspace с серверным неизменяемым `storage_key` и операциями create/read/rename.
 - Добавлены Alembic-миграции для отдельной PostgreSQL-схемы `graph_blizz` с идемпотентным обновлением до актуальной версии.
 - Добавлен FastAPI application factory и независимый от внешних сервисов `GET /health/live`.

@@ -91,13 +91,13 @@
       "id": "F009",
       "title": "[DEMO] Introduce security boundary and DemoOwner mode",
       "behavior": "С нуля определяются PrincipalContext, Permission, AuthorizedWorkspaceContext, IdentityResolver и WorkspaceAccessPolicy. Реализуются DemoOwnerIdentityResolver и DemoOwnerAccessPolicy. В GRAPH_BLIZZ_AUTH__MODE=demo_owner Authorization header и IdP не требуются; owner получает permissions для всех Demo/MVP operations. Никакие OIDC/RBAC/ACL tables не являются dependency этой задачи.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F004",
         "F008"
       ],
       "verification": "pytest -q tests/unit/security/test_demo_owner_mode.py tests/integration/test_demo_owner_http.py",
-      "evidence": ""
+      "evidence": "uv run --frozen pytest -q tests/unit/security/test_demo_owner_mode.py tests/integration/test_demo_owner_http.py: 16 passed; independent runtime/static audit confirmed immutable contexts, all 12 Demo/MVP permissions, credential-free HTTP demo_owner wiring and no OIDC/RBAC/ACL dependency; ./scripts/verify.sh passed lint, format, mypy, 86 unit tests and 2 integration tests"
     },
     {
       "id": "F010",

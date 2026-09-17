@@ -3,9 +3,10 @@
 from fastapi import FastAPI, status
 from fastapi.responses import JSONResponse
 
-from backend.config import ApplicationSettings
+from backend.config import ApplicationSettings, AuthMode
 from backend.observability import configure_logging
 from backend.postgres import postgres_is_ready
+from backend.security import DemoOwnerAccessPolicy, DemoOwnerIdentityResolver
 
 
 def create_app(settings: ApplicationSettings | None = None) -> FastAPI:
@@ -21,6 +22,16 @@ def create_app(settings: ApplicationSettings | None = None) -> FastAPI:
     configure_logging(resolved_settings.logging)
     application = FastAPI(title="Graph Blizz")
     application.state.settings = resolved_settings
+    if resolved_settings.auth.mode is not AuthMode.DEMO_OWNER:
+        raise RuntimeError(
+            f"auth mode {resolved_settings.auth.mode!s} has no configured adapters"
+        )
+    application.state.identity_resolver = DemoOwnerIdentityResolver(
+        resolved_settings.auth.demo_owner_id
+    )
+    application.state.workspace_access_policy = DemoOwnerAccessPolicy(
+        resolved_settings.auth.demo_owner_id
+    )
 
     @application.get("/health/live")
     async def liveness() -> dict[str, str]:

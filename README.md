@@ -62,6 +62,15 @@ Ruff, mypy и pytest устанавливаются в проектное окр
 короткие и placeholder-секреты отклоняются при загрузке. Секреты следует
 генерировать или передавать через secret manager, не добавляя их в репозиторий.
 
+В `demo_owner` режиме `Authorization` header и внешний IdP не нужны. Каждый
+endpoint может получить настроенного bootstrap owner через application
+`IdentityResolver`, а `DemoOwnerAccessPolicy` выдаёт ему полный набор Demo/MVP
+permissions и связывает операции с server-resolved workspace namespace.
+Идентификатор owner задаётся через `GRAPH_BLIZZ_AUTH__DEMO_OWNER_ID` (по
+умолчанию `demo-owner`). Режим не создаёт и не читает таблицы principals,
+memberships, RBAC или ACL. Другие auth modes не имеют неявного fallback в
+`demo_owner`.
+
 ## Миграции PostgreSQL
 
 Application metadata хранится в отдельной схеме `graph_blizz`, которой управляет
@@ -96,3 +105,4 @@ responses никогда не логируются. Решение и его о�
 - [ADR 0001: allow-list boundary для operational logging](docs/architecture/decisions/0001-safe-operational-logging-boundary.md)
 - [ADR 0002: PostgreSQL readiness в Docker Compose](docs/architecture/decisions/0002-postgresql-compose-readiness.md)
 - [ADR 0003: версионируемые миграции PostgreSQL через Alembic](docs/architecture/decisions/0003-versioned-postgresql-migrations.md)
+- [ADR 0004: security boundary и DemoOwner adapter](docs/architecture/decisions/0004-demo-owner-security-boundary.md)

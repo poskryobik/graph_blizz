@@ -24,6 +24,8 @@ services:
         condition: service_healthy
     environment:
       GRAPH_BLIZZ_ENVIRONMENT: development
+      GRAPH_BLIZZ_AUTH__MODE: ${GRAPH_BLIZZ_AUTH__MODE:-demo_owner}
+      GRAPH_BLIZZ_AUTH__DEMO_OWNER_ID: ${GRAPH_BLIZZ_AUTH__DEMO_OWNER_ID:-demo-owner}
       GRAPH_BLIZZ_POSTGRES__HOST: postgres
       GRAPH_BLIZZ_POSTGRES__PORT: "5432"
       GRAPH_BLIZZ_POSTGRES__DATABASE: graph_blizz
