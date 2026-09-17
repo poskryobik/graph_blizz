@@ -139,6 +139,12 @@ services:
       GRAPH_BLIZZ_QDRANT__URL: http://qdrant:6333
       GRAPH_BLIZZ_EMBEDDING__BASE_URL: ${GRAPH_BLIZZ_COMPOSE_EMBEDDING_BASE_URL:-http://vllm-embeddings:8000/v1}
       GRAPH_BLIZZ_EMBEDDING__MODEL: ai-sage/Giga-Embeddings-instruct-480M-0826
+      GRAPH_BLIZZ_EXTERNAL_LLM__BASE_URL: ${GRAPH_BLIZZ_COMPOSE_EXTERNAL_LLM_BASE_URL:-http://host.docker.internal:11434/v1}
+      GRAPH_BLIZZ_EXTERNAL_LLM__MODEL: ${GRAPH_BLIZZ_EXTERNAL_LLM__MODEL:-qwen3:1.7b}
+      GRAPH_BLIZZ_EXTERNAL_LLM__API_KEY:
+      GRAPH_BLIZZ_EXTERNAL_LLM__TIMEOUT_SECONDS: ${GRAPH_BLIZZ_EXTERNAL_LLM__TIMEOUT_SECONDS:-60}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${GRAPH_BLIZZ_API_PORT:-8000}:8000"
     healthcheck:

@@ -137,8 +137,8 @@ class EmbeddingSettings(BaseModel):
 class ExternalLLMSettings(BaseModel):
     """OpenAI-compatible external generative model settings."""
 
-    base_url: HttpUrl = HttpUrl("http://localhost:8001/v1")
-    model: NonEmptyText = "local-model"
+    base_url: HttpUrl = HttpUrl("http://localhost:11434/v1")
+    model: NonEmptyText = "qwen3:1.7b"
     api_key: NonEmptySecret | None = None
     timeout_seconds: PositiveSeconds = 60.0
     max_retries: Annotated[int, Field(ge=0)] = 3
@@ -190,7 +190,6 @@ class ApplicationSettings(BaseSettings):
             "minio.access_key": self.minio.access_key,
             "minio.secret_key": self.minio.secret_key,
             "neo4j.password": self.neo4j.password,
-            "external_llm.api_key": self.external_llm.api_key,
         }
         for name, value in required_secrets.items():
             if value is None:
@@ -199,6 +198,14 @@ class ApplicationSettings(BaseSettings):
                 invalid.append(
                     f"{name} must contain at least 16 non-placeholder characters"
                 )
+
+        if self.external_llm.api_key is not None and _is_weak_production_secret(
+            self.external_llm.api_key
+        ):
+            invalid.append(
+                "external_llm.api_key must contain at least 16 "
+                "non-placeholder characters"
+            )
 
         if invalid:
             raise ValueError(f"invalid production configuration: {', '.join(invalid)}")

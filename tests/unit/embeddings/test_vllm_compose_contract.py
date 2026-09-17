@@ -1,6 +1,7 @@
 """CI-safe contract checks for the optional vLLM embedding service."""
 
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -62,6 +63,63 @@ def test_env_example_keeps_rag_api_on_compose_service_dns() -> None:
         compose["services"]["rag-api"]["environment"]["GRAPH_BLIZZ_EMBEDDING__BASE_URL"]
         == "http://vllm-embeddings:8000/v1"
     )
+
+
+def test_rag_api_uses_host_ollama_defaults() -> None:
+    result = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "--env-file",
+            ".env.example",
+            "config",
+            "--format",
+            "json",
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    rag_api = json.loads(result.stdout)["services"]["rag-api"]
+
+    assert rag_api["environment"]["GRAPH_BLIZZ_EXTERNAL_LLM__BASE_URL"] == (
+        "http://host.docker.internal:11434/v1"
+    )
+    assert rag_api["environment"]["GRAPH_BLIZZ_EXTERNAL_LLM__MODEL"] == "qwen3:1.7b"
+    assert rag_api["environment"]["GRAPH_BLIZZ_EXTERNAL_LLM__TIMEOUT_SECONDS"] == "60"
+    assert rag_api["extra_hosts"] == ["host.docker.internal=host-gateway"]
+
+
+def test_rag_api_allows_external_llm_provider_overrides() -> None:
+    environment = os.environ | {
+        "GRAPH_BLIZZ_COMPOSE_EXTERNAL_LLM_BASE_URL": "https://llm.example/v1",
+        "GRAPH_BLIZZ_EXTERNAL_LLM__MODEL": "provider/model",
+        "GRAPH_BLIZZ_EXTERNAL_LLM__API_KEY": "test-provider-key",
+        "GRAPH_BLIZZ_EXTERNAL_LLM__TIMEOUT_SECONDS": "15",
+    }
+    result = subprocess.run(
+        ["docker", "compose", "config", "--format", "json"],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+    llm_environment = {
+        name: value
+        for name, value in json.loads(result.stdout)["services"]["rag-api"][
+            "environment"
+        ].items()
+        if name.startswith("GRAPH_BLIZZ_EXTERNAL_LLM__")
+    }
+
+    assert llm_environment == {
+        "GRAPH_BLIZZ_EXTERNAL_LLM__API_KEY": "test-provider-key",
+        "GRAPH_BLIZZ_EXTERNAL_LLM__BASE_URL": "https://llm.example/v1",
+        "GRAPH_BLIZZ_EXTERNAL_LLM__MODEL": "provider/model",
+        "GRAPH_BLIZZ_EXTERNAL_LLM__TIMEOUT_SECONDS": "15",
+    }
 
 
 def test_openai_embedding_contract_with_local_stub() -> None:

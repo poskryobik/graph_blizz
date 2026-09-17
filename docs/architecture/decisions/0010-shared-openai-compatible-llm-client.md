@@ -16,6 +16,10 @@ Extraction и generation должны обращаться к одной нас�
 Extraction и generation используют один асинхронный `LLMClient`, настроенный
 через `ExternalLLMSettings`. Клиент вызывает `<base_url>/chat/completions`,
 передаёт OpenAI-compatible messages и возвращает текст первого assistant choice.
+Host-конфигурация по умолчанию использует локальную Ollama с моделью
+`qwen3:1.7b` и endpoint `http://localhost:11434/v1` без обязательного API key.
+Для `rag-api` Compose использует `host.docker.internal:11434`; Ollama должна
+слушать адрес, доступный контейнеру, а не только loopback host.
 
 ## Consequences
 
@@ -23,6 +27,9 @@ Extraction и generation используют один асинхронный `L
 модели. Ошибки timeout, транспорта, HTTP и несовместимого протокола имеют
 стабильные application-типы. Поддержка намеренно ограничена текстовым assistant
 content; streaming, tools и multimodal responses потребуют отдельного решения.
+Привязка Compose к host model server требует явно разрешить Ollama принимать
+соединения с Docker bridge; endpoint, модель, timeout и необязательный API key
+остаются переопределяемыми для других OpenAI-compatible провайдеров.
 
 ## Alternatives considered
 

@@ -51,6 +51,8 @@ def test_defaults_cover_every_subsystem_without_real_secrets() -> None:
     assert settings.minio.secret_key is None
     assert settings.neo4j.password is None
     assert settings.external_llm.api_key is None
+    assert str(settings.external_llm.base_url) == "http://localhost:11434/v1"
+    assert settings.external_llm.model == "qwen3:1.7b"
 
 
 def test_example_environment_is_safe_and_loadable() -> None:
@@ -153,7 +155,6 @@ def test_production_rejects_demo_mode_and_missing_secrets() -> None:
         "minio.access_key",
         "minio.secret_key",
         "neo4j.password",
-        "external_llm.api_key",
     ):
         assert expected in message
 
@@ -178,12 +179,41 @@ def test_complete_production_configuration_is_accepted() -> None:
         postgres={"password": "postgres-secret-32"},
         minio={"access_key": "production-access", "secret_key": "minio-secret-key-32"},
         neo4j={"password": "neo4j-secret-key-32"},
-        external_llm={"api_key": "provider-api-key-32"},
         _env_file=None,
     )
 
     assert settings.environment is ApplicationEnvironment.PRODUCTION
     assert settings.auth.mode is AuthMode.OIDC
+
+
+def test_production_rejects_supplied_weak_external_llm_api_key() -> None:
+    with pytest.raises(ValidationError, match="external_llm.api_key"):
+        ApplicationSettings(
+            environment="production",
+            auth={"mode": "oidc"},
+            postgres={"password": "postgres-secret-32"},
+            minio={
+                "access_key": "production-access",
+                "secret_key": "minio-secret-key-32",
+            },
+            neo4j={"password": "neo4j-secret-key-32"},
+            external_llm={"api_key": "example"},
+            _env_file=None,
+        )
+
+
+def test_production_accepts_supplied_strong_external_llm_api_key() -> None:
+    settings = ApplicationSettings(
+        environment="production",
+        auth={"mode": "oidc"},
+        postgres={"password": "postgres-secret-32"},
+        minio={"access_key": "production-access", "secret_key": "minio-secret-key-32"},
+        neo4j={"password": "neo4j-secret-key-32"},
+        external_llm={"api_key": "provider-secret-key-32"},
+        _env_file=None,
+    )
+
+    assert settings.external_llm.api_key is not None
 
 
 def test_application_factory_stores_settings_without_external_connections() -> None:

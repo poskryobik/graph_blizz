@@ -210,7 +210,7 @@
         "F004"
       ],
       "verification": "pytest -q tests/unit/llm/test_client.py tests/integration/test_llm_compatible_api.py",
-      "evidence": "Independent verification passed all F019 criteria; focused LLM client/contract tests: 13 passed; ./scripts/verify.sh passed Ruff, format, mypy, 182 unit tests and integration suite (5 passed, 10 skipped, 1 GPU deselected); git diff --check passed; verified shared async chat-completions client, ExternalLLMSettings wiring, single-model extraction/generation, stable timeout/transport/HTTP/protocol error mapping, strict assistant-content validation, local compatible stub contract, and no local model loading"
+      "evidence": "Independent verification iteration 3 passed all F019 and Ollama criteria; host defaults use http://localhost:11434/v1 and qwen3:1.7b, while Compose resolves rag-api to http://host.docker.internal:11434/v1 with a narrowly scoped host-gateway mapping; live Ollama /api/tags confirmed qwen3:1.7b and /v1/chat/completions returned non-empty assistant content with finish_reason=stop; focused tests passed; ./scripts/verify.sh passed Ruff, format, mypy, 186 unit tests and integration suite (5 passed, 10 skipped, 1 GPU deselected); production permits an absent Ollama key but rejects a supplied weak provider key; docker compose config and git diff --check passed"
     },
     {
       "id": "F020",

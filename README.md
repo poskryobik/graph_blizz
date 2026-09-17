@@ -86,6 +86,17 @@ Extraction и generation используют один async
 OpenAI-compatible messages, возвращает content первого assistant choice и не
 загружает модель в процесс приложения.
 
+По умолчанию при запуске приложения на host используется локальная Ollama с
+моделью `qwen3:1.7b` по адресу `http://localhost:11434/v1`; API key не нужен.
+В `rag-api` Compose передаёт endpoint
+`http://host.docker.internal:11434/v1`. На Linux alias добавляется только сервису
+`rag-api`. Ollama при таком запуске должна слушать адрес, доступный контейнеру,
+а не только loopback host. Compose endpoint можно изменить через
+`GRAPH_BLIZZ_COMPOSE_EXTERNAL_LLM_BASE_URL`; модель и timeout — через обычные
+`GRAPH_BLIZZ_EXTERNAL_LLM__MODEL` и
+`GRAPH_BLIZZ_EXTERNAL_LLM__TIMEOUT_SECONDS`. Для другого OpenAI-compatible
+провайдера также можно задать `GRAPH_BLIZZ_EXTERNAL_LLM__API_KEY`.
+
 MinIO доступен приложению по `http://minio:9000`. Runtime adapter
 `backend.storage.ObjectStore` выполняет S3-совместимые `put/get/delete`; bucket
 `GRAPH_BLIZZ_MINIO__BUCKET` должен быть создан при bootstrap окружения.
