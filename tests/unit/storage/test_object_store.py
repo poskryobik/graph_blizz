@@ -44,6 +44,10 @@ def test_put_writes_exact_bytes_to_configured_bucket(
     )
 
 
+def test_uri_uses_configured_bucket_and_key(store: ObjectStore) -> None:
+    assert store.uri("workspace/source") == "s3://documents/workspace/source"
+
+
 def test_constructor_maps_minio_settings_to_s3_client() -> None:
     settings = MinIOSettings(
         endpoint_url="http://minio:9000",

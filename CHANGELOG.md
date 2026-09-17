@@ -9,6 +9,7 @@
 
 ### Added
 
+- Добавлено сохранение original document source в MinIO до indexing с SHA-256 и S3 URI в metadata; source остаётся доступен после ошибки indexing.
 - Добавлен постоянный реестр документов с workspace-local `source_key` и Demo-статусами жизненного цикла.
 - Добавлены MinIO с persistent volume и S3-совместимый adapter `put/get/delete` для хранения объектов.
 - Добавлены owner-only `POST /workspaces` и `GET /workspaces/{workspace_id}` через DemoOwner security boundary без клиентского доступа к `storage_key`.

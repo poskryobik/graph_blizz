@@ -27,6 +27,9 @@ docker compose up -d --build --wait
 MinIO доступен приложению по `http://minio:9000`. Runtime adapter
 `backend.storage.ObjectStore` выполняет S3-совместимые `put/get/delete`; bucket
 `GRAPH_BLIZZ_MINIO__BUCKET` должен быть создан при bootstrap окружения.
+Original document source сохраняется до запуска indexing по Demo-ключу
+`workspace/{workspace_id}/document/{document_id}/source`; его S3 URI и SHA-256
+фиксируются в metadata документа, а ошибка последующего indexing source не удаляет.
 
 ## Проверки
 

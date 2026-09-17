@@ -71,6 +71,26 @@ def test_create_leaves_identity_status_and_timestamps_to_database() -> None:
     assert document.status is DocumentStatus.UPLOADED
 
 
+def test_create_accepts_service_generated_document_id() -> None:
+    repository, connection, _ = _repository(_row())
+
+    asyncio.run(
+        repository.create(
+            document_id=DOCUMENT_ID,
+            workspace_id=WORKSPACE_ID,
+            source_key="source.pdf",
+            filename="source.pdf",
+            source_type="application/pdf",
+            object_uri="s3://documents/workspace/source.pdf",
+            content_hash="a" * 64,
+        )
+    )
+
+    statement, parameters = connection.execute.await_args.args
+    assert "(\n                id, workspace_id" in statement
+    assert parameters[0] == DOCUMENT_ID
+
+
 def test_get_returns_document_and_missing_document() -> None:
     repository, connection, _ = _repository(_row())
     document = asyncio.run(repository.get(WORKSPACE_ID, DOCUMENT_ID))

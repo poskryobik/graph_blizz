@@ -23,6 +23,7 @@ class DocumentRepository:
     async def create(
         self,
         *,
+        document_id: UUID | None = None,
         workspace_id: UUID,
         source_key: str,
         filename: str,
@@ -30,17 +31,39 @@ class DocumentRepository:
         object_uri: str,
         content_hash: str,
     ) -> Document:
-        """Create an uploaded document with database-generated metadata."""
+        """Create an uploaded document, optionally with a caller-generated id."""
+        if document_id is None:
+            cursor = await self._connection.execute(
+                f"""
+                INSERT INTO graph_blizz.documents (
+                    workspace_id, source_key, filename, source_type, object_uri,
+                    content_hash
+                )
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING {self._COLUMNS}
+                """,
+                (
+                    workspace_id,
+                    source_key,
+                    filename,
+                    source_type,
+                    object_uri,
+                    content_hash,
+                ),
+            )
+            return self._document(await cursor.fetchone())
+
         cursor = await self._connection.execute(
             f"""
             INSERT INTO graph_blizz.documents (
-                workspace_id, source_key, filename, source_type, object_uri,
+                id, workspace_id, source_key, filename, source_type, object_uri,
                 content_hash
             )
-            VALUES (%s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING {self._COLUMNS}
             """,
             (
+                document_id,
                 workspace_id,
                 source_key,
                 filename,

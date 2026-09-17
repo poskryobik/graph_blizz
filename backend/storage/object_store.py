@@ -74,6 +74,10 @@ class ObjectStore:
         except (BotoCoreError, ClientError) as error:
             raise ObjectStorageError(f"failed to put object {key!r}") from error
 
+    def uri(self, key: str) -> str:
+        """Return the stable S3 URI stored in application metadata."""
+        return f"s3://{self._bucket}/{key}"
+
     def get(self, key: str) -> bytes:
         """Return object bytes stored under ``key``.
 
