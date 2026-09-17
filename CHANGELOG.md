@@ -9,6 +9,7 @@
 
 ### Added
 
+- Добавлено постоянное хранение workspace с серверным неизменяемым `storage_key` и операциями create/read/rename.
 - Добавлены Alembic-миграции для отдельной PostgreSQL-схемы `graph_blizz` с идемпотентным обновлением до актуальной версии.
 - Добавлен FastAPI application factory и независимый от внешних сервисов `GET /health/live`.
 - Добавлен Compose-bootstrap `rag-api` и PostgreSQL с persistent volume, internal network и фактической проверкой БД через `GET /health/ready`.

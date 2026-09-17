@@ -80,12 +80,12 @@
       "id": "F008",
       "title": "[DEMO] Persist workspaces",
       "behavior": "Создаётся минимальная таблица workspaces: UUID id, name, slug, immutable server-generated storage_key, status и timestamps. Rename не меняет storage_key. Repository не зависит от authentication tables.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F007"
       ],
       "verification": "pytest -q tests/unit/workspaces/test_repository.py tests/integration/test_workspace_schema.py",
-      "evidence": ""
+      "evidence": "uv run --frozen pytest -q tests/unit/workspaces/test_repository.py: 4 passed; PostgreSQL integration tests for workspace schema and migrations: 3 passed; ./scripts/verify.sh passed lint, format, mypy and 72 unit tests"
     },
     {
       "id": "F009",
