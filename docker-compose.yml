@@ -1,7 +1,7 @@
 services:
   minio:
     image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
-    command: server /data
+    command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${GRAPH_BLIZZ_MINIO__ACCESS_KEY:-graph-blizz-demo}
       MINIO_ROOT_PASSWORD: ${GRAPH_BLIZZ_MINIO__SECRET_KEY:-graph-blizz-demo-password}
@@ -11,10 +11,14 @@ services:
       timeout: 3s
       retries: 15
       start_period: 5s
+    ports:
+      - "${GRAPH_BLIZZ_MINIO_API_PORT:-9000}:9000"
+      - "${GRAPH_BLIZZ_MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
       - minio_data:/data
     networks:
       - backend
+      - host_access
 
   postgres:
     image: postgres:17-alpine
@@ -69,6 +73,7 @@ services:
       start_period: 5s
     networks:
       - backend
+      - host_access
 
 volumes:
   minio_data:
@@ -77,3 +82,4 @@ volumes:
 networks:
   backend:
     internal: true
+  host_access:

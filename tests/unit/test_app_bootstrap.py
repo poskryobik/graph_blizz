@@ -29,6 +29,22 @@ def test_liveness_does_not_require_external_services() -> None:
     assert response.json() == {"status": "healthy"}
 
 
+@pytest.mark.parametrize("path", ["/docs", "/redoc"])
+def test_api_documentation_is_available(path: str) -> None:
+    async def get_documentation() -> Response:
+        transport = ASGITransport(app=create_app())
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            return await client.get(path)
+
+    response = asyncio.run(get_documentation())
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+
+
 @pytest.mark.parametrize(
     ("database_ready", "expected_status", "expected_body"),
     [

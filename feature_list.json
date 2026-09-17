@@ -672,6 +672,18 @@
       "evidence": ""
     },
     {
+      "id": "F060",
+      "title": "[DEMO] Expose web interfaces and FastAPI documentation",
+      "behavior": "Docker Compose публикует rag-api с FastAPI Swagger/ReDoc и web console MinIO на настраиваемых host-портах. PostgreSQL остаётся internal-only, а README описывает адреса подключения.",
+      "state": "pass",
+      "depends_on": [
+        "F001",
+        "F011"
+      ],
+      "verification": "docker compose config && pytest -q tests/unit/test_app_bootstrap.py tests/unit/test_compose_web_access.py",
+      "evidence": "Independent live Compose verification: Swagger /docs and /redoc returned HTTP 200; MinIO API health and Console returned HTTP 200 with effective host bindings; PostgreSQL remained unpublished/internal-only. Focused tests: 10 passed; ./scripts/verify.sh: lint, format, mypy, 110 unit tests and 3 integration tests passed (8 skipped)."
+    },
+    {
       "id": "F059",
       "title": "[POST-MVP] Establish final regression gate and synchronize documentation",
       "behavior": "Финальный scripts/verify.sh объединяет lint/typecheck, unit, integration, MVP E2E и security suites; GPU tests остаются отдельным profile. architecture.md, README и operational docs описывают DemoOwner, OIDC/RBAC migration, backup/recovery, logging, observability и deployment boundaries.",
