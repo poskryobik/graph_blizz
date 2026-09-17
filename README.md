@@ -62,6 +62,21 @@ Ruff, mypy и pytest устанавливаются в проектное окр
 короткие и placeholder-секреты отклоняются при загрузке. Секреты следует
 генерировать или передавать через secret manager, не добавляя их в репозиторий.
 
+## Миграции PostgreSQL
+
+Application metadata хранится в отдельной схеме `graph_blizz`, которой управляет
+линейная история Alembic. После настройки `GRAPH_BLIZZ_POSTGRES__*` примените все
+миграции перед запуском новой версии приложения:
+
+```bash
+uv run alembic upgrade head
+```
+
+Команда безопасна для повторного запуска на уже актуальной базе. Новая миграция
+создаётся командой `uv run alembic revision -m "описание"`; application objects
+должны явно использовать схему `graph_blizz`. Решение зафиксировано в
+[ADR 0003](docs/architecture/decisions/0003-versioned-postgresql-migrations.md).
+
 ## Operational logging
 
 Приложение настраивает logger `graph_blizz` при создании FastAPI application.
@@ -80,3 +95,4 @@ responses никогда не логируются. Решение и его о�
 
 - [ADR 0001: allow-list boundary для operational logging](docs/architecture/decisions/0001-safe-operational-logging-boundary.md)
 - [ADR 0002: PostgreSQL readiness в Docker Compose](docs/architecture/decisions/0002-postgresql-compose-readiness.md)
+- [ADR 0003: версионируемые миграции PostgreSQL через Alembic](docs/architecture/decisions/0003-versioned-postgresql-migrations.md)

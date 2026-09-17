@@ -9,6 +9,7 @@
 
 ### Added
 
+- Добавлены Alembic-миграции для отдельной PostgreSQL-схемы `graph_blizz` с идемпотентным обновлением до актуальной версии.
 - Добавлен FastAPI application factory и независимый от внешних сервисов `GET /health/live`.
 - Добавлен Compose-bootstrap `rag-api` и PostgreSQL с persistent volume, internal network и фактической проверкой БД через `GET /health/ready`.
 - Добавлены отдельные unit, integration и e2e runner'ы и общий verification pipeline.

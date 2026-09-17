@@ -69,12 +69,12 @@
       "id": "F007",
       "title": "[DEMO] Introduce application database migrations",
       "behavior": "Добавляется Alembic или эквивалентный механизм application migrations. Создаётся app schema и versioned migration history. Повторный upgrade актуальной БД идемпотентен.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F006"
       ],
       "verification": "pytest -q tests/integration/test_migrations.py",
-      "evidence": ""
+      "evidence": "pytest -q tests/integration/test_migrations.py: 1 passed on real PostgreSQL; fresh upgrade created graph_blizz schema at revision 20260917_0001; repeated upgrade preserved the schema/version snapshot; ./scripts/verify.sh passed with 68 unit and 2 integration tests"
     },
     {
       "id": "F008",
