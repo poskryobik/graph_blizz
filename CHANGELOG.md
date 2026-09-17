@@ -9,6 +9,7 @@
 
 ### Added
 
+- Добавлены типизированные plain text и Markdown parsers с immutable результатами и registry для MIME types и расширений Demo.
 - Добавлен доступ с host к Swagger UI, ReDoc, MinIO S3 API и web Console через настраиваемые Compose-порты; PostgreSQL остаётся internal-only.
 - Добавлено сохранение original document source в MinIO до indexing с SHA-256 и S3 URI в metadata; source остаётся доступен после ошибки indexing.
 - Добавлен постоянный реестр документов с workspace-local `source_key` и Demo-статусами жизненного цикла.
