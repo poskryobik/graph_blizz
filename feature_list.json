@@ -205,12 +205,12 @@
       "id": "F019",
       "title": "[DEMO] Implement minimal OpenAI-compatible LLM adapter",
       "behavior": "Создаётся OpenAI-compatible client с base_url, model, secret, timeout и стабильным error mapping. Одна модель может обслуживать extraction и generation. Integration test использует локальный compatible stub.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F004"
       ],
       "verification": "pytest -q tests/unit/llm/test_client.py tests/integration/test_llm_compatible_api.py",
-      "evidence": ""
+      "evidence": "Independent verification passed all F019 criteria; focused LLM client/contract tests: 13 passed; ./scripts/verify.sh passed Ruff, format, mypy, 182 unit tests and integration suite (5 passed, 10 skipped, 1 GPU deselected); git diff --check passed; verified shared async chat-completions client, ExternalLLMSettings wiring, single-model extraction/generation, stable timeout/transport/HTTP/protocol error mapping, strict assistant-content validation, local compatible stub contract, and no local model loading"
     },
     {
       "id": "F020",

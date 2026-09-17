@@ -9,6 +9,7 @@
 
 ### Added
 
+- Добавлен единый async OpenAI-compatible LLM-клиент для extraction и generation с общей моделью, timeout и стабильными transport/HTTP/protocol ошибками.
 - Добавлен единый async-клиент OpenAI-compatible embeddings для API и будущего worker с timeout, стабильными ошибками и проверкой batch-индексов и размерности векторов.
 - Добавлен opt-in GPU Compose profile с vLLM endpoint `/v1/embeddings`, точной Giga Embeddings model, постоянным Hugging Face cache и раздельными host/container URL; обычный CI проверяет контракт без GPU.
 - Добавлен internal-only Neo4j с persistent volume, реальным healthcheck и внутренним connectivity adapter без нового публичного application API.

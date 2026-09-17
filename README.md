@@ -77,6 +77,15 @@ GRAPH_BLIZZ_RUN_GPU_TESTS=1 uv run --frozen pytest -q \
 проверяет `GRAPH_BLIZZ_EMBEDDING__DIMENSION` и не загружает embedding-модель в
 процесс `rag-api` или worker.
 
+Extraction и generation используют один async
+`backend.llm.LLMClient` и одну модель через OpenAI-compatible endpoint
+`POST <base_url>/chat/completions`. Endpoint, модель, API key и timeout задаются
+через `GRAPH_BLIZZ_EXTERNAL_LLM__BASE_URL`,
+`GRAPH_BLIZZ_EXTERNAL_LLM__MODEL`, `GRAPH_BLIZZ_EXTERNAL_LLM__API_KEY` и
+`GRAPH_BLIZZ_EXTERNAL_LLM__TIMEOUT_SECONDS`. Клиент поддерживает текстовые
+OpenAI-compatible messages, возвращает content первого assistant choice и не
+загружает модель в процесс приложения.
+
 MinIO доступен приложению по `http://minio:9000`. Runtime adapter
 `backend.storage.ObjectStore` выполняет S3-совместимые `put/get/delete`; bucket
 `GRAPH_BLIZZ_MINIO__BUCKET` должен быть создан при bootstrap окружения.
@@ -190,3 +199,5 @@ responses никогда не логируются. Решение и его о�
 - [ADR 0006: базовая граница парсеров для Demo](docs/architecture/decisions/0006-demo-parser-boundary.md)
 - [ADR 0007: Qdrant connectivity boundary](docs/architecture/decisions/0007-qdrant-connectivity-boundary.md)
 - [ADR 0008: Neo4j connectivity boundary](docs/architecture/decisions/0008-neo4j-connectivity-boundary.md)
+- [ADR 0009: единый клиент embeddings](docs/architecture/decisions/0009-shared-embedding-client.md)
+- [ADR 0010: единый OpenAI-compatible LLM-клиент](docs/architecture/decisions/0010-shared-openai-compatible-llm-client.md)
