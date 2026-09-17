@@ -194,12 +194,12 @@
       "id": "F018",
       "title": "[DEMO] Implement embedding client contract",
       "behavior": "Создаётся единый embedding client с timeout, error mapping и dimension validation. rag-api и будущий worker используют один endpoint и не загружают модель локально.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F017"
       ],
       "verification": "pytest -q tests/unit/embeddings/test_client.py tests/integration/test_embedding_contract.py",
-      "evidence": ""
+      "evidence": "Independent verification passed all F018 criteria; focused client/contract tests: 13 passed; ./scripts/verify.sh passed Ruff, format, mypy, 170 unit tests and integration suite (4 passed, 10 skipped, 1 GPU deselected); git diff --check passed; verified shared async single/batch client, order preservation, EmbeddingSettings wiring, stable error mapping, strict response/dimension validation, local compatible stub contract and no local model loading"
     },
     {
       "id": "F019",

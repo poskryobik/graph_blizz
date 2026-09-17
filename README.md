@@ -72,6 +72,11 @@ GRAPH_BLIZZ_RUN_GPU_TESTS=1 uv run --frozen pytest -q \
 Обычные unit-тесты проверяют Compose и OpenAI API contract через локальный stub,
 а `verify-integration.sh` исключает marker `gpu`.
 
+Приложение обращается к endpoint только через общий async
+`backend.embeddings.EmbeddingClient`; клиент поддерживает single и batch вызовы,
+проверяет `GRAPH_BLIZZ_EMBEDDING__DIMENSION` и не загружает embedding-модель в
+процесс `rag-api` или worker.
+
 MinIO доступен приложению по `http://minio:9000`. Runtime adapter
 `backend.storage.ObjectStore` выполняет S3-совместимые `put/get/delete`; bucket
 `GRAPH_BLIZZ_MINIO__BUCKET` должен быть создан при bootstrap окружения.

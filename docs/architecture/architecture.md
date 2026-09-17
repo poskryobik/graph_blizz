@@ -1128,3 +1128,7 @@ OIDC principal
 ```
 
 Такой порядок разработки минимизирует time-to-demo и одновременно сохраняет чистую границу для последующего production security.
+
+## Architecture decisions
+
+- [0009 — Единый клиент embeddings](decisions/0009-shared-embedding-client.md)
