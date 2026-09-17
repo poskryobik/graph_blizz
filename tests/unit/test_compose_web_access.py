@@ -42,6 +42,19 @@ def test_postgres_remains_internal_only() -> None:
     assert "host_access" not in postgres
 
 
+def test_qdrant_publishes_configurable_web_port() -> None:
+    qdrant = service_definition("qdrant")
+
+    assert "image: qdrant/qdrant:v1.15.4" in qdrant
+    assert '"${GRAPH_BLIZZ_QDRANT_PORT:-6333}:6333"' in qdrant
+    assert "      - qdrant_data:/qdrant/storage" in qdrant
+    assert "healthcheck:" in qdrant
+    assert "GET /readyz HTTP/1.1" in qdrant
+    assert 'test "$$status" = 200' in qdrant
+    assert ":> /dev/tcp" not in qdrant
+    assert "      - backend\n      - host_access" in qdrant
+
+
 def test_host_access_network_is_not_internal() -> None:
     compose = COMPOSE_FILE.read_text(encoding="utf-8")
 

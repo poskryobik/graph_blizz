@@ -9,7 +9,7 @@ uv sync --dev
 uv run uvicorn backend.app:app --reload
 ```
 
-Для запуска текущего Demo-контура с PostgreSQL и MinIO:
+Для запуска текущего Demo-контура с PostgreSQL, MinIO и Qdrant:
 
 ```bash
 docker compose up -d --build --wait
@@ -21,12 +21,14 @@ Web-интерфейсы доступны с host по следующим адр
 - API: `http://localhost:8000`, Swagger UI: `http://localhost:8000/docs`, ReDoc: `http://localhost:8000/redoc`;
 - MinIO S3 API: `http://localhost:9000`;
 - MinIO Console: `http://localhost:9001`.
+- Qdrant Web UI и REST API: `http://localhost:6333/dashboard` и `http://localhost:6333`.
 
 Host-порты можно переопределить через `GRAPH_BLIZZ_API_PORT`,
-`GRAPH_BLIZZ_MINIO_API_PORT` и `GRAPH_BLIZZ_MINIO_CONSOLE_PORT` соответственно.
+`GRAPH_BLIZZ_MINIO_API_PORT`, `GRAPH_BLIZZ_MINIO_CONSOLE_PORT` и
+`GRAPH_BLIZZ_QDRANT_PORT` соответственно.
 Например, `GRAPH_BLIZZ_API_PORT=8080 docker compose up -d --build --wait`
 опубликует Swagger UI по адресу `http://localhost:8080/docs`. Данные сохраняются
-в named volumes `postgres_data` и `minio_data`. Compose использует только
+в named volumes `postgres_data`, `minio_data` и `qdrant_data`. Compose использует только
 локальные demo-секреты по умолчанию; их
 можно заменить через `GRAPH_BLIZZ_POSTGRES__PASSWORD`,
 `GRAPH_BLIZZ_MINIO__ACCESS_KEY` и `GRAPH_BLIZZ_MINIO__SECRET_KEY` в локальном
@@ -39,6 +41,11 @@ MinIO доступен приложению по `http://minio:9000`. Runtime ad
 Original document source сохраняется до запуска indexing по Demo-ключу
 `workspace/{workspace_id}/document/{document_id}/source`; его S3 URI и SHA-256
 фиксируются в metadata документа, а ошибка последующего indexing source не удаляет.
+
+Qdrant доступен приложению по `http://qdrant:6333`. Внутренний adapter
+`backend.storage.QdrantConnectivity` проверяет соединение и явно закрывает
+официальный client; отдельный публичный application endpoint для Qdrant не
+предоставляется.
 
 ## Проверки
 
@@ -134,3 +141,4 @@ responses никогда не логируются. Решение и его о�
 - [ADR 0004: security boundary и DemoOwner adapter](docs/architecture/decisions/0004-demo-owner-security-boundary.md)
 - [ADR 0005: MinIO через S3-совместимый ObjectStorage adapter](docs/architecture/decisions/0005-minio-object-storage-adapter.md)
 - [ADR 0006: базовая граница парсеров для Demo](docs/architecture/decisions/0006-demo-parser-boundary.md)
+- [ADR 0007: Qdrant connectivity boundary](docs/architecture/decisions/0007-qdrant-connectivity-boundary.md)

@@ -160,13 +160,13 @@
     {
       "id": "F015",
       "title": "[DEMO] Bootstrap Qdrant",
-      "behavior": "В Docker Compose добавляется Qdrant с healthcheck и persistent volume. Реализуется connectivity adapter. Прямой пользовательский API к Qdrant отсутствует.",
-      "state": "not started",
+      "behavior": "В Docker Compose добавляется Qdrant с healthcheck и persistent volume. Реализуется connectivity adapter. Прямой пользовательский API к Qdrant отсутствует. Qdrant доступен в вебе.",
+      "state": "pass",
       "depends_on": [
         "F006"
       ],
       "verification": "pytest -q tests/integration/test_qdrant_bootstrap.py",
-      "evidence": ""
+      "evidence": "UV_CACHE_DIR=/tmp/graph-rag-uv-cache uv run --frozen pytest -q tests/integration/test_qdrant_bootstrap.py: 1 passed on real Qdrant; connectivity and named-volume persistence survived forced container recreation; independent verification confirmed HTTP /readyz healthcheck requiring status 200, configurable web access, internal adapter lifecycle/error mapping and absence of a public application route; ./scripts/verify.sh passed lint, format, mypy, 151 unit tests and 12 integration tests"
     },
     {
       "id": "F016",

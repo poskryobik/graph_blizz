@@ -5,5 +5,12 @@ from backend.storage.object_store import (
     ObjectStorageError,
     ObjectStore,
 )
+from backend.storage.qdrant import QdrantConnectionError, QdrantConnectivity
 
-__all__ = ["ObjectNotFoundError", "ObjectStorageError", "ObjectStore"]
+__all__ = [
+    "ObjectNotFoundError",
+    "ObjectStorageError",
+    "ObjectStore",
+    "QdrantConnectionError",
+    "QdrantConnectivity",
+]
