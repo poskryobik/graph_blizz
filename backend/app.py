@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, status
 from fastapi.responses import JSONResponse
 
-from backend.api import documents_router, workspaces_router
+from backend.api import documents_router, query_router, workspaces_router
 from backend.config import ApplicationSettings, AuthMode
 from backend.observability import configure_logging
 from backend.parsers import create_default_parser_registry
@@ -54,6 +54,7 @@ def create_app(settings: ApplicationSettings | None = None) -> FastAPI:
     application.state.runtime_registry = runtime_registry
     application.include_router(workspaces_router)
     application.include_router(documents_router)
+    application.include_router(query_router)
 
     @application.get("/health/live")
     async def liveness() -> dict[str, str]:

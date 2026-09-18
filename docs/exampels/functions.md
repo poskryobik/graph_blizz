@@ -1,5 +1,20 @@
 # Examples
 
+## Graph RAG запрос к workspace
+
+`QueryService` получает runtime только через авторизованный workspace context,
+выполняет retrieval/generation и возвращает минимальные sources из `READY`
+документов того же workspace.
+
+### Example
+
+```python
+from backend.query import QueryService
+
+service = QueryService(document_repository, runtime_registry)
+result = await service.query(authorized_workspace, "Что описано в документах?")
+```
+
 ## Загрузка и чтение документа через Demo API
 
 Multipart upload сохраняет source и синхронно запускает индексирование. Физические

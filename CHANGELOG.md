@@ -12,6 +12,7 @@
 
 ### Added
 
+- Добавлен `POST /v1/workspaces/{id}/query` с Demo-owner авторизацией, Graph RAG ответом, уникальным `request_id` и минимальными workspace-scoped sources.
 - Добавлены Demo-owner upload/list/get endpoints документов с серверными storage-ключами и синхронным inline indexing до `READY` или `FAILED`.
 - Добавлен независимый от HTTP inline `IndexingService`: он читает сохранённый source, выбирает parser и переводит документ через `INDEXING` в `READY` или `FAILED`.
 - Добавлен ленивый workspace-scoped реестр LightRAG runtime с namespace только из авторизованного контекста и graceful shutdown.

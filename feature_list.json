@@ -269,13 +269,13 @@
       "id": "F024",
       "title": "[DEMO] Implement Graph RAG query API with minimal sources",
       "behavior": "POST /v1/workspaces/{id}/query в demo_owner mode разрешает workspace runtime, выполняет LightRAG retrieval/generation и возвращает answer, workspace_id, request_id и минимум document_id/filename sources. Query path не зависит от users, memberships или JWT.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F021",
         "F023"
       ],
       "verification": "pytest -q tests/unit/query/test_service.py tests/integration/test_query_api_demo.py",
-      "evidence": ""
+      "evidence": "Independent verification iteration 1 passed all F024 criteria. The framework-independent QueryService resolves LightRAG only through AuthorizedWorkspaceContext, executes non-streaming retrieval/generation, and returns workspace-scoped READY document sources with document_id/filename. The exact demo-owner POST query route works without JWT, creates unique UUID request IDs, rejects namespace injection/invalid payloads, and maps runtime failures to a safe 502. Focused tests: 6 passed. Full scripts/verify.sh gate passed Ruff, format, mypy, 227 unit tests and integration suite (12 passed, 11 skipped, 1 deselected); git diff --check passed."
     },
     {
       "id": "F025",

@@ -208,6 +208,23 @@ metadata переходит в `FAILED`; временная ошибка object 
 `404` для отсутствующего workspace или документа в выбранном workspace. Клиент не
 может задавать или читать `storage_key`, `source_key`, object URI и content hash.
 
+## Query API
+
+В `demo_owner` режиме Graph RAG запрос выполняется без `Authorization` header:
+
+```bash
+curl -X POST \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"Что сказано в загруженных документах?"}' \
+  http://localhost:8000/v1/workspaces/12345678-1234-5678-1234-567812345678/query
+```
+
+Ответ содержит `answer`, UUID полей `workspace_id` и `request_id`, а также
+минимальные `document_id`/`filename` для проиндексированных (`READY`)
+документов этого workspace. Поля physical namespace не принимаются: runtime
+выбирается сервером только после Demo-owner авторизации. Ошибка runtime
+возвращает безопасный `502` без внутренних storage-идентификаторов.
+
 ## Миграции PostgreSQL
 
 Application metadata хранится в отдельной схеме `graph_blizz`, которой управляет
@@ -251,3 +268,4 @@ responses никогда не логируются. Решение и его о�
 - [ADR 0010: единый OpenAI-compatible LLM-клиент](docs/architecture/decisions/0010-shared-openai-compatible-llm-client.md)
 - [ADR 0011: LightRAG Core как граница storage и model runtime](docs/architecture/decisions/0011-lightrag-storage-runtime-wiring.md)
 - [ADR 0012: реестр LightRAG runtime по авторизованному workspace](docs/architecture/decisions/0012-workspace-runtime-registry.md)
+- [ADR 0013: Demo query service с workspace-scoped sources](docs/architecture/decisions/0013-demo-query-service.md)
