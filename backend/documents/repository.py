@@ -104,6 +104,27 @@ class DocumentRepository:
         )
         return [self._document(row) for row in await cursor.fetchall()]
 
+    async def transition_status(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+        from_status: DocumentStatus,
+        to_status: DocumentStatus,
+    ) -> Document | None:
+        """Atomically change status when the document is in the expected state."""
+        cursor = await self._connection.execute(
+            f"""
+            UPDATE graph_blizz.documents
+            SET status = %s, updated_at = now()
+            WHERE workspace_id = %s AND id = %s AND status = %s
+            RETURNING {self._COLUMNS}
+            """,
+            (to_status.value, workspace_id, document_id, from_status.value),
+        )
+        row = await cursor.fetchone()
+        return None if row is None else self._document(row)
+
     @staticmethod
     def _document(row: tuple[Any, ...] | None) -> Document:
         """Map the fixed repository projection to a document entity."""

@@ -116,6 +116,26 @@ def test_list_scopes_documents_to_workspace() -> None:
     assert [document.id for document in documents] == [DOCUMENT_ID]
 
 
+def test_transition_status_is_atomic_and_returns_updated_document() -> None:
+    row = (*_row()[:7], "INDEXING", _row()[8], _row()[9])
+    repository, connection, _ = _repository(row)
+
+    document = asyncio.run(
+        repository.transition_status(
+            workspace_id=WORKSPACE_ID,
+            document_id=DOCUMENT_ID,
+            from_status=DocumentStatus.UPLOADED,
+            to_status=DocumentStatus.INDEXING,
+        )
+    )
+
+    statement, parameters = connection.execute.await_args.args
+    assert "WHERE workspace_id = %s AND id = %s AND status = %s" in statement
+    assert parameters == ("INDEXING", WORKSPACE_ID, DOCUMENT_ID, "UPLOADED")
+    assert document is not None
+    assert document.status is DocumentStatus.INDEXING
+
+
 def test_document_status_contains_only_demo_states() -> None:
     assert {status.value for status in DocumentStatus} == {
         "UPLOADED",

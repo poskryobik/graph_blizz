@@ -1,5 +1,20 @@
 # Examples
 
+## Индексация сохранённого документа
+
+`IndexingService` читает original source через storage boundary, выбирает parser
+по MIME type или имени файла и вставляет разобранный текст в LightRAG runtime,
+полученный только из авторизованного workspace context.
+
+### Example
+
+```python
+from backend.indexing import IndexingService
+
+service = IndexingService(repository, source_service, parser_registry, runtimes)
+ready_document = await service.index(authorized_workspace, uploaded_document)
+```
+
 ## Проверка соединения с Neo4j
 
 `Neo4jConnectivity` проверяет доступность настроенного Neo4j через Bolt и

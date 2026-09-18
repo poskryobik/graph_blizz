@@ -243,14 +243,14 @@
       "id": "F022",
       "title": "[DEMO] Implement reusable inline IndexingService",
       "behavior": "IndexingService читает source, выбирает parser, переводит document в INDEXING, вызывает LightRAG insert и завершает READY/FAILED. Сервис не зависит от FastAPI request objects, чтобы позднее использоваться rag-worker без переписывания core logic.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F013",
         "F014",
         "F021"
       ],
       "verification": "pytest -q tests/unit/indexing/test_service.py tests/integration/test_inline_indexing.py",
-      "evidence": ""
+      "evidence": "Independent verification iteration 2 passed all F022 criteria. Focused tests: 10 passed. Full verification passed Ruff, format, mypy, 213 unit tests and integration suite (7 passed, 11 skipped, 1 deselected). Adversarial cancellation probes confirmed that cancellation after INDEXING makes a cancellation-safe FAILED transition, preserves the original CancelledError despite cleanup failure or repeated cancellation, and leaves no orphan tasks. The service reads through DocumentSourceService, selects parsers through ParserRegistry, obtains runtimes only from AuthorizedWorkspaceContext via LightRAGRuntimeRegistry, and has no FastAPI dependency. git diff --check passed."
     },
     {
       "id": "F023",

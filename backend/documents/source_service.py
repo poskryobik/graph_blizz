@@ -47,6 +47,12 @@ class DocumentSourceService:
             content_hash=sha256(content).hexdigest(),
         )
 
+    def read(self, document: Document) -> bytes:
+        """Read the exact source bytes persisted for ``document``."""
+        return self._object_store.get(
+            self.object_key(document.workspace_id, document.id)
+        )
+
     @staticmethod
     def object_key(workspace_id: UUID, document_id: UUID) -> str:
         """Return the revision-free Demo key for one workspace document."""
