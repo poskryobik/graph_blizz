@@ -14,7 +14,6 @@ from backend.api.workspaces import _authorize, get_workspace_repository
 from backend.config import PostgreSQLSettings
 from backend.documents import (
     Document,
-    DocumentContentChangedError,
     DocumentRepository,
     DocumentScopeConflictError,
     DocumentSourceService,
@@ -193,11 +192,6 @@ async def upsert_document(
             source_type=source_type,
             content=content,
         )
-    except DocumentContentChangedError as error:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="document content differs from the active revision",
-        ) from error
     except DocumentScopeConflictError as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from error
     except ObjectStorageError as error:
@@ -209,7 +203,11 @@ async def upsert_document(
         workspace_id=document.workspace_id,
         filename=document.filename,
         source_type=document.source_type,
-        revision=document.active_revision,
+        revision=(
+            document.active_revision
+            if result.job is None
+            else result.job.document_revision
+        ),
         status=document.status if result.job is None else result.job.status,
         job_id=None if result.job is None else result.job.id,
         created_at=document.created_at,

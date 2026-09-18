@@ -21,7 +21,6 @@ from backend.api.documents import (
 from backend.api.workspaces import get_workspace_repository
 from backend.documents import (
     Document,
-    DocumentContentChangedError,
     DocumentStatus,
     DocumentUpsertAction,
     DocumentUpsertResult,
@@ -161,19 +160,28 @@ def test_identical_put_exposes_unchanged_without_storage_metadata() -> None:
     dependencies["sources"].upsert_for_indexing.assert_awaited_once()
 
 
-def test_changed_put_is_conflict_without_public_replacement() -> None:
+def test_changed_put_exposes_pending_replacement() -> None:
+    replacement_job = replace(JOB, document_revision=2)
     response, dependencies = _request(
         "PUT",
         f"/v1/workspaces/{WORKSPACE_ID}/documents/{DOCUMENT_ID}",
         files={"file": ("notes.md", b"changed", "text/markdown")},
         configure=lambda dependencies: setattr(
             dependencies["sources"].upsert_for_indexing,
-            "side_effect",
-            DocumentContentChangedError("changed"),
+            "return_value",
+            DocumentUpsertResult(
+                action=DocumentUpsertAction.UPDATED,
+                document=replace(READY, status=DocumentStatus.UPDATING),
+                job=replacement_job,
+            ),
         ),
     )
 
-    assert response.status_code == 409
+    assert response.status_code == 200
+    assert response.json()["action"] == "updated"
+    assert response.json()["revision"] == 2
+    assert response.json()["status"] == "PENDING"
+    assert response.json()["job_id"] == str(replacement_job.id)
     dependencies["sources"].upsert_for_indexing.assert_awaited_once()
 
 

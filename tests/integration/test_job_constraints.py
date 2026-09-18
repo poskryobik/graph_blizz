@@ -27,6 +27,17 @@ def postgres_project() -> Iterator[tuple[str, dict[str, str]]]:
     environment["GRAPH_BLIZZ_POSTGRES__PASSWORD"] = "f028-integration-password"
     try:
         _compose(project, environment, "up", "-d", "--build", "--wait", timeout=300)
+        _compose(
+            project,
+            environment,
+            "exec",
+            "-T",
+            "rag-api",
+            "/app/.venv/bin/alembic",
+            "upgrade",
+            "head",
+            timeout=60,
+        )
         yield project, environment
     finally:
         _compose(
@@ -187,7 +198,8 @@ def test_database_rejects_conflicting_active_job_but_allows_after_terminal(
     _psql(
         project,
         environment,
-        "UPDATE graph_blizz.jobs SET status = 'CANCELLED', finished_at = now() "
+        "UPDATE graph_blizz.jobs SET status = 'CANCELLED', finished_at = now(), "
+        "updated_at = now() "
         f"WHERE document_id = '{document_id}';",
     )
     _psql(

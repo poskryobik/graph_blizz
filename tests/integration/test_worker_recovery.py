@@ -63,8 +63,8 @@ def test_expired_lease_becomes_claimable_without_incrementing_on_recovery(
                 "'s3://graph-blizz/recovery', 'hash' FROM d), j AS (INSERT INTO "
                 "graph_blizz.jobs (document_id, document_revision, status, attempts, "
                 "lease_owner, lease_expires_at, heartbeat_at, started_at, updated_at) "
-                "SELECT id, 1, 'RUNNING', 1, 'dead-worker', now() - interval '1 second', "
-                "now() - interval '1 minute', now() - interval '1 minute', now() FROM d "
+                "SELECT id, 1, 'RUNNING', 1, 'dead-worker', "
+                "now() + interval '1 microsecond', now(), now(), now() FROM d "
                 "RETURNING id) SELECT id FROM j"
             )
             row = await cursor.fetchone()
@@ -119,8 +119,9 @@ def test_replacement_waits_for_old_execution_and_old_cleanup_is_fenced(
             await old.execute("SELECT pg_advisory_lock(%s)", (lock_key,))
             await old.commit()
             await old.execute(
-                "UPDATE graph_blizz.jobs SET lease_expires_at = now() - interval "
-                "'1 second' WHERE id = %s",
+                "UPDATE graph_blizz.jobs SET "
+                "lease_expires_at = heartbeat_at + interval '1 microsecond' "
+                "WHERE id = %s",
                 (job_id,),
             )
             await old.commit()

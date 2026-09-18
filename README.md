@@ -92,6 +92,10 @@ claiming и завершает текущую job. После принудите
 document state защищены owner, attempt и живым lease. Upload API сохраняет
 immutable revision, атомарно создаёт durable job и сразу возвращает
 `status=PENDING` с `job_id`; indexing выполняет `rag-worker`.
+`PUT` с изменённым содержимым создаёт следующую immutable revision и переводит
+документ в `UPDATING`, но сохраняет прежнюю revision активной до полного успеха
+replacement job. Worker удаляет старую индексированную версию через lifecycle
+LightRAG, индексирует новую и атомарно переключает document в `READY`.
 
 ### GPU embeddings через vLLM
 
@@ -269,7 +273,9 @@ best-effort. Логический `document_id` остаётся стабиль�
 revision 1 и job с `action=created`; повтор с тем же SHA-256 возвращает
 `action=unchanged`, текущие `revision`/`status` и `job_id=null`, не создавая source,
 revision или job. Конкурентные одинаковые запросы сериализуются по `document_id`.
-Замена отличающегося содержимого до появления lifecycle F032 возвращает `409`.
+Изменённое содержимое создаёт следующую immutable revision и durable job с
+`action=updated`; прежняя revision остаётся активной, пока worker не завершит
+замену индекса и атомарно не вернёт документ из `UPDATING` в `READY`.
 
 Список и отдельная metadata читаются через
 `GET /v1/workspaces/{workspace_id}/documents` и
@@ -341,3 +347,4 @@ responses никогда не логируются. Решение и его о�
 - [ADR 0013: Demo query service с workspace-scoped sources](docs/architecture/decisions/0013-demo-query-service.md)
 - [ADR 0014: неизменяемые ревизии документов](docs/architecture/decisions/0014-immutable-document-revisions.md)
 - [ADR 0016: leased PostgreSQL worker для indexing jobs](docs/architecture/decisions/0016-leased-rag-worker.md)
+- [ADR 0017: замена индексированного документа через lifecycle LightRAG](docs/architecture/decisions/0017-lightrag-document-replacement.md)

@@ -143,5 +143,6 @@ def test_document_status_contains_only_demo_states() -> None:
         "UPLOADED",
         "INDEXING",
         "READY",
+        "UPDATING",
         "FAILED",
     }

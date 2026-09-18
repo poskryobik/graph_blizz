@@ -5,14 +5,15 @@ from dataclasses import dataclass
 from hashlib import sha256
 from uuid import UUID, uuid4
 
-from backend.documents.models import Document, DocumentRevision, DocumentUpsertAction
+from backend.documents.models import (
+    Document,
+    DocumentRevision,
+    DocumentStatus,
+    DocumentUpsertAction,
+)
 from backend.documents.repository import DocumentRepository
 from backend.jobs import Job, JobRepository
 from backend.storage import ObjectStorageError, ObjectStore
-
-
-class DocumentContentChangedError(RuntimeError):
-    """Signal that replacement must be handled by the F032 lifecycle."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,11 +127,10 @@ class DocumentSourceService:
         source_type: str,
         content: bytes,
     ) -> DocumentUpsertResult:
-        """Create once or return unchanged for identical source content.
+        """Create, return unchanged, or enqueue an immutable replacement.
 
         The document-scoped transaction lock covers both the SHA-256 comparison
-        and first creation, so concurrent identical requests produce one source,
-        revision, and durable job. Changed replacement remains delegated to F032.
+        and mutation creation, so concurrent requests retain one active job.
         """
         content_hash = sha256(content).hexdigest()
         stored_key: str | None = None
@@ -139,15 +139,47 @@ class DocumentSourceService:
                 workspace_id=workspace_id, document_id=document_id
             )
             if existing is not None:
-                if existing.content_hash != content_hash:
-                    raise DocumentContentChangedError(
-                        "changed document replacement is not available yet"
+                if existing.content_hash == content_hash:
+                    await self._repository.commit()
+                    return DocumentUpsertResult(
+                        action=DocumentUpsertAction.UNCHANGED,
+                        document=existing,
+                        job=None,
                     )
+
+                def store_replacement(revision_number: int) -> str:
+                    nonlocal stored_key
+                    stored_key = self.object_key(
+                        workspace_id, document_id, revision_number
+                    )
+                    self._object_store.put(stored_key, content)
+                    return self._object_store.uri(stored_key)
+
+                revision = await self._repository.add_revision(
+                    workspace_id=workspace_id,
+                    document_id=document_id,
+                    content_hash=content_hash,
+                    object_uri_factory=store_replacement,
+                )
+                if revision is None:
+                    raise LookupError("document disappeared during replacement")
+                updating = await self._repository.transition_status(
+                    workspace_id=workspace_id,
+                    document_id=document_id,
+                    from_status=DocumentStatus.READY,
+                    to_status=DocumentStatus.UPDATING,
+                )
+                if updating is None:
+                    raise RuntimeError("document is not ready for replacement")
+                job = await jobs.create_indexing(
+                    document_id=document_id,
+                    document_revision=revision.revision,
+                )
                 await self._repository.commit()
                 return DocumentUpsertResult(
-                    action=DocumentUpsertAction.UNCHANGED,
-                    document=existing,
-                    job=None,
+                    action=DocumentUpsertAction.UPDATED,
+                    document=updating,
+                    job=job,
                 )
 
             stored_key = self.object_key(workspace_id, document_id, 1)

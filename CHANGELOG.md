@@ -15,6 +15,7 @@
 
 ### Added
 
+- Изменённый document `PUT` теперь создаёт immutable replacement revision и durable job; worker заменяет LightRAG-индекс и активирует revision только после полного успеха (F032).
 - Public document upload теперь атомарно сохраняет immutable revision и durable indexing job, возвращая `PENDING`, `revision` и `job_id` без inline indexing (F030).
 - Добавлен отдельный `rag-worker` с атомарным PostgreSQL claiming, lease/heartbeat, retry, recovery истёкших jobs и graceful shutdown (F029).
 - Добавлены durable indexing jobs с проверяемым lifecycle, lease/heartbeat, allow-listed кодами ошибок без traceback/секретов и запретом параллельных mutation jobs одного документа (F028).

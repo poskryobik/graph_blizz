@@ -83,6 +83,23 @@ await repository.activate_revision(
 await repository.commit()
 ```
 
+## Замена содержимого документа
+
+`PUT` с изменёнными bytes создаёт следующую immutable revision и durable job,
+оставляя прежнюю revision активной со статусом документа `UPDATING`. Worker под
+document lock удаляет прежний документ через `LightRAG.adelete_by_doc_id`,
+индексирует новую revision и только после полного успеха атомарно активирует её,
+возвращает документ в `READY` и завершает job.
+
+### Example
+
+```bash
+curl -X PUT -F 'file=@guide-v2.md;type=text/markdown' \
+  http://localhost:8000/v1/workspaces/12345678-1234-5678-1234-567812345678/documents/aaaaaaaa-1234-5678-1234-567812345678
+
+# {"action":"updated","revision":2,"status":"PENDING","job_id":"...",...}
+```
+
 ## Проверка соединения с Neo4j
 
 `Neo4jConnectivity` проверяет доступность настроенного Neo4j через Bolt и

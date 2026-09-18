@@ -360,12 +360,12 @@
       "id": "F032",
       "title": "[MVP] Replace changed document through LightRAG lifecycle",
       "behavior": "Changed content создаёт новую revision, документ переходит в UPDATING, старая версия удаляется через supported LightRAG operation, новая индексируется, active_revision переключается только после успеха. Application не пишет vectors/graph entities напрямую.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F031"
       ],
       "verification": "pytest -q tests/unit/workflows/test_document_replace.py tests/integration/test_document_replace.py",
-      "evidence": ""
+      "evidence": "Independent verification iteration 4 passed all F032 criteria. Changed PUT atomically persists the next immutable revision and durable PENDING job, returns action=updated, moves the document to UPDATING, and keeps the prior revision active until success. The worker claims the real PENDING job, uses supported LightRAG delete-before-insert operations for the exact replacement revision, then atomically activates revision 2, sets READY, and completes the job under owner/attempt/live-lease fences; failures and stale workers cannot activate it. No direct application writes to vector or graph entities were introduced. The focused Docker gate passed 4 tests, migration/job-constraint checks passed 4 tests, the full integration suite passed 39 tests (1 deselected), the full unit suite passed 294 tests, and Ruff, formatting, mypy, and git diff checks passed."
     },
     {
       "id": "F033",

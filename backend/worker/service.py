@@ -5,6 +5,7 @@ from typing import Any
 from uuid import UUID
 
 import psycopg
+from lightrag.utils import compute_mdhash_id  # type: ignore[import-untyped]
 from psycopg import AsyncConnection
 
 from backend.config import ApplicationSettings, PostgreSQLSettings
@@ -144,7 +145,7 @@ class IndexingJobProcessor:
         self._parsers = create_default_parser_registry()
 
     async def process(self, job: Job) -> None:
-        """Index the exact active revision referenced by ``job``."""
+        """Index the exact revision referenced by ``job`` under its document lock."""
         async with await connect_postgres(self._settings.postgres) as connection:
             await connection.execute(
                 "SELECT pg_advisory_lock(%s)",
@@ -159,6 +160,9 @@ class IndexingJobProcessor:
                 raise LookupError("job document revision is unavailable")
             if document.status is DocumentStatus.READY:
                 return
+            active = await documents.get(workspace_id, job.document_id)
+            if active is None:
+                raise LookupError("job document is unavailable")
             if document.status in {DocumentStatus.FAILED, DocumentStatus.INDEXING}:
                 reset = await documents.transition_status(
                     workspace_id=workspace_id,
@@ -187,7 +191,58 @@ class IndexingJobProcessor:
                 self._parsers,
                 self._runtimes,
             )
+            if (
+                document.status is DocumentStatus.UPDATING
+                and job.document_revision != active.active_revision
+            ):
+                await self._replace(
+                    documents=documents,
+                    sources=DocumentSourceService(documents, self._object_store),
+                    context=context,
+                    active=active,
+                    replacement=document,
+                    job=job,
+                )
+                return
             await service.index(context, document)
+
+    async def _replace(
+        self,
+        *,
+        documents: LeasedDocumentRepository,
+        sources: DocumentSourceService,
+        context: AuthorizedWorkspaceContext,
+        active: Document,
+        replacement: Document,
+        job: Job,
+    ) -> None:
+        """Delete the active LightRAG document, index replacement, then activate it."""
+        old_content = self._parse(sources, active)
+        new_content = self._parse(sources, replacement)
+        runtime = await self._runtimes.get(context)
+        await runtime.rag.adelete_by_doc_id(
+            compute_mdhash_id(old_content, prefix="doc-")
+        )
+        await runtime.rag.ainsert(new_content)
+        completed = await documents.complete_replacement_for_job(
+            workspace_id=context.workspace_id,
+            document_id=replacement.id,
+            revision=job.document_revision,
+            job_id=job.id,
+            lease_owner=job.lease_owner or "",
+            attempt=job.attempts,
+        )
+        if completed is None:
+            raise RuntimeError("replacement job lease ownership was lost")
+        await documents.commit()
+
+    def _parse(self, sources: DocumentSourceService, document: Document) -> str:
+        source = sources.read(document).decode("utf-8")
+        parser = self._parsers.get_parser(
+            media_type=document.source_type,
+            filename=document.filename,
+        )
+        return parser.parse(source, source_name=document.filename).content
 
     @staticmethod
     def _document_lock_key(document_id: UUID) -> int:

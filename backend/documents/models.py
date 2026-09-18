@@ -12,6 +12,7 @@ class DocumentStatus(StrEnum):
     UPLOADED = "UPLOADED"
     INDEXING = "INDEXING"
     READY = "READY"
+    UPDATING = "UPDATING"
     FAILED = "FAILED"
 
 
@@ -19,6 +20,7 @@ class DocumentUpsertAction(StrEnum):
     """Public outcome of an idempotent document upsert."""
 
     CREATED = "created"
+    UPDATED = "updated"
     UNCHANGED = "unchanged"
 
 

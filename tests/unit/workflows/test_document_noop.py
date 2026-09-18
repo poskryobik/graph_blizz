@@ -10,7 +10,6 @@ import pytest
 
 from backend.documents import (
     Document,
-    DocumentContentChangedError,
     DocumentSourceService,
     DocumentStatus,
     DocumentUpsertAction,
@@ -53,32 +52,6 @@ def test_identical_upsert_is_unchanged_without_revision_source_or_job() -> None:
     jobs.create_indexing.assert_not_awaited()
     object_store.put.assert_not_called()
     repository.commit.assert_awaited_once_with()
-
-
-def test_changed_upsert_stops_before_f032_mutation() -> None:
-    repository = AsyncMock()
-    repository.lock_for_upsert.return_value = _document(content_hash="different")
-    object_store = MagicMock()
-    jobs = AsyncMock()
-
-    with pytest.raises(DocumentContentChangedError):
-        asyncio.run(
-            DocumentSourceService(repository, object_store).upsert_for_indexing(
-                jobs=jobs,
-                workspace_id=WORKSPACE_ID,
-                document_id=DOCUMENT_ID,
-                source_key=f"upsert-{DOCUMENT_ID}",
-                filename="notes.md",
-                source_type="text/markdown",
-                content=CONTENT,
-            )
-        )
-
-    repository.rollback.assert_awaited_once_with()
-    repository.create.assert_not_awaited()
-    repository.add_revision.assert_not_awaited()
-    jobs.create_indexing.assert_not_awaited()
-    object_store.put.assert_not_called()
 
 
 def _document(*, content_hash: str) -> Document:

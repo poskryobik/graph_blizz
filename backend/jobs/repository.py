@@ -18,6 +18,12 @@ class JobRepository:
         "lease_expires_at, heartbeat_at, started_at, finished_at, error_code, "
         "error_detail"
     )
+    _JOB_COLUMNS = (
+        "job.id, job.document_id, job.document_revision, job.job_type, job.status, "
+        "job.attempts, job.max_attempts, job.available_at, job.created_at, "
+        "job.updated_at, job.lease_owner, job.lease_expires_at, job.heartbeat_at, "
+        "job.started_at, job.finished_at, job.error_code, job.error_detail"
+    )
 
     def __init__(self, connection: AsyncConnection[Any]) -> None:
         """Bind repository operations to a caller-owned database connection."""
@@ -75,7 +81,7 @@ class JobRepository:
                 updated_at = now(), error_code = NULL, error_detail = NULL
             FROM candidate
             WHERE job.id = candidate.id
-            RETURNING {self._COLUMNS}
+            RETURNING {self._JOB_COLUMNS}
             """,
             (owner, lease_for),
         )
