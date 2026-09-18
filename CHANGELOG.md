@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Идентичный document upsert теперь возвращает `action=unchanged` без новой immutable revision, source-объекта или durable indexing job, включая конкурентные запросы (F031).
 - Исправлено восстановление indexing job после аварии между переводом документа в `READY` и записью успеха job (F029).
 - Устранена гонка recovery indexing job: старый execution больше не пересекается с новым и не может изменить его document state после потери lease (F029).
 - Upload документов теперь сохраняет `FAILED` после ошибки indexing, компенсирует source при ошибке commit metadata и отклоняет Windows/UNC-пути в имени файла.

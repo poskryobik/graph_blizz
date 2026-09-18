@@ -9,6 +9,10 @@ from psycopg import AsyncConnection
 from backend.documents.models import Document, DocumentRevision, DocumentStatus
 
 
+class DocumentScopeConflictError(RuntimeError):
+    """Signal that a document id belongs to a different workspace."""
+
+
 class DocumentRepository:
     """Create and resolve document metadata through an async connection."""
 
@@ -34,6 +38,29 @@ class DocumentRepository:
     async def rollback(self) -> None:
         """Roll back the current document transaction."""
         await self._connection.rollback()
+
+    async def lock_for_upsert(
+        self, *, workspace_id: UUID, document_id: UUID
+    ) -> Document | None:
+        """Serialize one logical document upsert and return its active revision.
+
+        A transaction-scoped advisory lock is used because a row lock cannot
+        serialize concurrent writers before the document row exists.
+        """
+        await self._connection.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+            (str(document_id),),
+        )
+        document = await self.get(workspace_id, document_id)
+        if document is not None:
+            return document
+        cursor = await self._connection.execute(
+            "SELECT 1 FROM graph_blizz.documents WHERE id = %s",
+            (document_id,),
+        )
+        if await cursor.fetchone() is not None:
+            raise DocumentScopeConflictError("document belongs to another workspace")
+        return None
 
     async def create(
         self,

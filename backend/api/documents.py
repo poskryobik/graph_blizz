@@ -14,9 +14,12 @@ from backend.api.workspaces import _authorize, get_workspace_repository
 from backend.config import PostgreSQLSettings
 from backend.documents import (
     Document,
+    DocumentContentChangedError,
     DocumentRepository,
+    DocumentScopeConflictError,
     DocumentSourceService,
     DocumentStatus,
+    DocumentUpsertAction,
 )
 from backend.jobs import JobRepository, JobStatus
 from backend.parsers import ParserRegistry, UnsupportedDocumentTypeError
@@ -41,15 +44,16 @@ class DocumentResponse(BaseModel):
 
 
 class DocumentUploadResponse(BaseModel):
-    """Accepted document revision and its durable indexing job."""
+    """Public create/no-op outcome without physical storage metadata."""
 
+    action: DocumentUpsertAction
     id: UUID
     workspace_id: UUID
     filename: str
     source_type: str
     revision: int
-    status: JobStatus
-    job_id: UUID
+    status: DocumentStatus | JobStatus
+    job_id: UUID | None
     created_at: datetime
     updated_at: datetime
 
@@ -134,6 +138,7 @@ async def upload_document(
     except ObjectStorageError as error:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE) from error
     return DocumentUploadResponse(
+        action=DocumentUpsertAction.CREATED,
         id=document.id,
         workspace_id=document.workspace_id,
         filename=document.filename,
@@ -141,6 +146,72 @@ async def upload_document(
         revision=document.active_revision,
         status=job.status,
         job_id=job.id,
+        created_at=document.created_at,
+        updated_at=document.updated_at,
+    )
+
+
+@router.put("/{document_id}", response_model=DocumentUploadResponse)
+async def upsert_document(
+    workspace_id: UUID,
+    document_id: UUID,
+    request: Request,
+    file: Annotated[UploadFile, File()],
+    repository: Annotated[DocumentRepository, Depends(get_document_repository)],
+    sources: Annotated[DocumentSourceService, Depends(get_source_service)],
+    jobs: Annotated[JobRepository, Depends(get_job_repository)],
+    workspace_repository: Annotated[
+        WorkspaceRepository, Depends(get_workspace_repository)
+    ],
+) -> DocumentUploadResponse:
+    """Create a stable document or return its identical active revision."""
+    workspace = await _workspace_or_404(workspace_repository, workspace_id)
+    await _authorize(request, workspace, Permission.DOCUMENT_CREATE)
+    filename = _safe_filename(file.filename)
+    source_type = file.content_type or "application/octet-stream"
+    parsers = cast(ParserRegistry, request.app.state.parser_registry)
+    try:
+        parsers.get_parser(media_type=source_type, filename=filename)
+    except UnsupportedDocumentTypeError as error:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
+        ) from error
+    content = await file.read(MAX_UPLOAD_BYTES + 1)
+    if not content:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="empty upload"
+        )
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+    try:
+        result = await sources.upsert_for_indexing(
+            jobs=jobs,
+            workspace_id=workspace_id,
+            document_id=document_id,
+            source_key=f"upsert-{document_id}",
+            filename=filename,
+            source_type=source_type,
+            content=content,
+        )
+    except DocumentContentChangedError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="document content differs from the active revision",
+        ) from error
+    except DocumentScopeConflictError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from error
+    except ObjectStorageError as error:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE) from error
+    document = result.document
+    return DocumentUploadResponse(
+        action=result.action,
+        id=document.id,
+        workspace_id=document.workspace_id,
+        filename=document.filename,
+        source_type=document.source_type,
+        revision=document.active_revision,
+        status=document.status if result.job is None else result.job.status,
+        job_id=None if result.job is None else result.job.id,
         created_at=document.created_at,
         updated_at=document.updated_at,
     )

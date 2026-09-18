@@ -15,6 +15,13 @@ class DocumentStatus(StrEnum):
     FAILED = "FAILED"
 
 
+class DocumentUpsertAction(StrEnum):
+    """Public outcome of an idempotent document upsert."""
+
+    CREATED = "created"
+    UNCHANGED = "unchanged"
+
+
 @dataclass(frozen=True, slots=True)
 class Document:
     """Persistent metadata for one workspace document source."""

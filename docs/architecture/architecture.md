@@ -736,6 +736,7 @@ GET    /v1/workspaces
 GET    /v1/workspaces/{id}
 
 POST   /v1/workspaces/{id}/documents
+PUT    /v1/workspaces/{id}/documents/{document_id}
 GET    /v1/workspaces/{id}/documents
 GET    /v1/workspaces/{id}/documents/{document_id}
 
@@ -749,7 +750,6 @@ POST   /v1/workspaces/{id}/query
 ## 25. Public API — MVP additions
 
 ```text
-PUT    /v1/workspaces/{id}/documents/{document_id}
 DELETE /v1/workspaces/{id}/documents/{document_id}
 GET    /v1/jobs/{job_id}
 POST   /v1/workspaces/{id}/maintenance/reindex

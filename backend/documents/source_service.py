@@ -1,13 +1,27 @@
 """Original document source persistence orchestration."""
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from hashlib import sha256
 from uuid import UUID, uuid4
 
-from backend.documents.models import Document, DocumentRevision
+from backend.documents.models import Document, DocumentRevision, DocumentUpsertAction
 from backend.documents.repository import DocumentRepository
 from backend.jobs import Job, JobRepository
 from backend.storage import ObjectStorageError, ObjectStore
+
+
+class DocumentContentChangedError(RuntimeError):
+    """Signal that replacement must be handled by the F032 lifecycle."""
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentUpsertResult:
+    """Document upsert outcome and an optional newly-created indexing job."""
+
+    action: DocumentUpsertAction
+    document: Document
+    job: Job | None
 
 
 class DocumentSourceService:
@@ -99,6 +113,71 @@ class DocumentSourceService:
                 self._object_store.delete(object_key)
             except ObjectStorageError:
                 pass
+            raise
+
+    async def upsert_for_indexing(
+        self,
+        *,
+        jobs: JobRepository,
+        workspace_id: UUID,
+        document_id: UUID,
+        source_key: str,
+        filename: str,
+        source_type: str,
+        content: bytes,
+    ) -> DocumentUpsertResult:
+        """Create once or return unchanged for identical source content.
+
+        The document-scoped transaction lock covers both the SHA-256 comparison
+        and first creation, so concurrent identical requests produce one source,
+        revision, and durable job. Changed replacement remains delegated to F032.
+        """
+        content_hash = sha256(content).hexdigest()
+        stored_key: str | None = None
+        try:
+            existing = await self._repository.lock_for_upsert(
+                workspace_id=workspace_id, document_id=document_id
+            )
+            if existing is not None:
+                if existing.content_hash != content_hash:
+                    raise DocumentContentChangedError(
+                        "changed document replacement is not available yet"
+                    )
+                await self._repository.commit()
+                return DocumentUpsertResult(
+                    action=DocumentUpsertAction.UNCHANGED,
+                    document=existing,
+                    job=None,
+                )
+
+            stored_key = self.object_key(workspace_id, document_id, 1)
+            self._object_store.put(stored_key, content)
+            document = await self._repository.create(
+                document_id=document_id,
+                workspace_id=workspace_id,
+                source_key=source_key,
+                filename=filename,
+                source_type=source_type,
+                object_uri=self._object_store.uri(stored_key),
+                content_hash=content_hash,
+            )
+            job = await jobs.create_indexing(
+                document_id=document.id,
+                document_revision=document.active_revision,
+            )
+            await self._repository.commit()
+            return DocumentUpsertResult(
+                action=DocumentUpsertAction.CREATED,
+                document=document,
+                job=job,
+            )
+        except BaseException:
+            await self._rollback()
+            if stored_key is not None:
+                try:
+                    self._object_store.delete(stored_key)
+                except ObjectStorageError:
+                    pass
             raise
 
     async def _rollback(self) -> None:

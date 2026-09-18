@@ -258,11 +258,18 @@ workspace-контекст через `DemoOwnerAccessPolicy`. Поле `storage
 multipart-запросом `POST /v1/workspaces/{workspace_id}/documents` в поле `file`.
 Размер source ограничен 10 MiB. Запрос сохраняет original source и immutable
 ревизию, атомарно создаёт durable indexing job и сразу возвращает `201` со
-`status=PENDING`, номером `revision` и `job_id`. Индексирование выполняет
+`action=created`, `status=PENDING`, номером `revision` и `job_id`. Индексирование выполняет
 `rag-worker`; временная ошибка object storage возвращает `503`. Если job не удалось
 создать, document и revision откатываются, а загруженный объект удаляется
 best-effort. Логический `document_id` остаётся стабильным, а Demo API читает
 активную ревизию.
+
+Идемпотентный upsert выполняется тем же multipart-полем через
+`PUT /v1/workspaces/{workspace_id}/documents/{document_id}`. Первый запрос создаёт
+revision 1 и job с `action=created`; повтор с тем же SHA-256 возвращает
+`action=unchanged`, текущие `revision`/`status` и `job_id=null`, не создавая source,
+revision или job. Конкурентные одинаковые запросы сериализуются по `document_id`.
+Замена отличающегося содержимого до появления lifecycle F032 возвращает `409`.
 
 Список и отдельная metadata читаются через
 `GET /v1/workspaces/{workspace_id}/documents` и

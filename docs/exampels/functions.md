@@ -18,7 +18,7 @@ result = await service.query(authorized_workspace, "Что описано в д�
 ## Загрузка и чтение документа через Demo API
 
 Multipart upload сохраняет immutable source revision и атомарно создаёт durable
-indexing job. Ответ содержит `status=PENDING`, `revision` и `job_id`; физические
+indexing job. Ответ содержит `action=created`, `status=PENDING`, `revision` и `job_id`; физические
 ключи формируются сервером и не входят в запрос или ответ.
 
 ### Example
@@ -27,10 +27,24 @@ indexing job. Ответ содержит `status=PENDING`, `revision` и `job_i
 curl -F 'file=@guide.md;type=text/markdown' \
   http://localhost:8000/v1/workspaces/12345678-1234-5678-1234-567812345678/documents
 
-# {"id":"...","revision":1,"status":"PENDING","job_id":"...",...}
+# {"action":"created","id":"...","revision":1,"status":"PENDING","job_id":"...",...}
 
 curl \
   http://localhost:8000/v1/workspaces/12345678-1234-5678-1234-567812345678/documents
+```
+
+## Идемпотентный upsert документа
+
+`PUT` со стабильным `document_id` создаёт документ только один раз. Повтор с теми
+же bytes возвращает текущую активную ревизию с `action=unchanged` и `job_id=null`.
+
+### Example
+
+```bash
+curl -X PUT -F 'file=@guide.md;type=text/markdown' \
+  http://localhost:8000/v1/workspaces/12345678-1234-5678-1234-567812345678/documents/aaaaaaaa-1234-5678-1234-567812345678
+
+# {"action":"unchanged","id":"aaaaaaaa-...","revision":1,"status":"READY","job_id":null,...}
 ```
 
 ## Индексация сохранённого документа

@@ -19,7 +19,13 @@ from backend.api.documents import (
     get_source_service,
 )
 from backend.api.workspaces import get_workspace_repository
-from backend.documents import Document, DocumentStatus
+from backend.documents import (
+    Document,
+    DocumentContentChangedError,
+    DocumentStatus,
+    DocumentUpsertAction,
+    DocumentUpsertResult,
+)
 from backend.jobs import Job, JobStatus, JobType
 from backend.security import Permission
 from backend.workspaces import Workspace, WorkspaceStatus
@@ -128,6 +134,47 @@ def test_upload_enqueues_and_hides_server_storage_fields() -> None:
     assert store_kwargs["content"] == b"# Notes"
     assert store_kwargs["source_key"].startswith("upload-")
     assert store_kwargs["jobs"] is dependencies["jobs"]
+
+
+def test_identical_put_exposes_unchanged_without_storage_metadata() -> None:
+    response, dependencies = _request(
+        "PUT",
+        f"/v1/workspaces/{WORKSPACE_ID}/documents/{DOCUMENT_ID}",
+        files={"file": ("notes.md", b"# Notes", "text/markdown")},
+        configure=lambda dependencies: setattr(
+            dependencies["sources"].upsert_for_indexing,
+            "return_value",
+            DocumentUpsertResult(
+                action=DocumentUpsertAction.UNCHANGED,
+                document=READY,
+                job=None,
+            ),
+        ),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["action"] == "unchanged"
+    assert response.json()["revision"] == 1
+    assert response.json()["status"] == "READY"
+    assert response.json()["job_id"] is None
+    assert {"source_key", "object_uri", "content_hash"}.isdisjoint(response.json())
+    dependencies["sources"].upsert_for_indexing.assert_awaited_once()
+
+
+def test_changed_put_is_conflict_without_public_replacement() -> None:
+    response, dependencies = _request(
+        "PUT",
+        f"/v1/workspaces/{WORKSPACE_ID}/documents/{DOCUMENT_ID}",
+        files={"file": ("notes.md", b"changed", "text/markdown")},
+        configure=lambda dependencies: setattr(
+            dependencies["sources"].upsert_for_indexing,
+            "side_effect",
+            DocumentContentChangedError("changed"),
+        ),
+    )
+
+    assert response.status_code == 409
+    dependencies["sources"].upsert_for_indexing.assert_awaited_once()
 
 
 def test_upload_rejects_paths_and_unsupported_types_before_storage() -> None:
