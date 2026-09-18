@@ -342,7 +342,7 @@ app.workspaces
 app.documents
 ```
 
-### С F027
+### С F028
 
 ```text
 app.document_revisions
@@ -647,6 +647,12 @@ claim job
 ```
 
 Для MVP достаточно PostgreSQL queue с `FOR UPDATE SKIP LOCKED`; Kafka/RabbitMQ не требуются.
+Job ссылается на конкретную immutable revision. Активными считаются `PENDING`,
+`RUNNING` и `RETRY`; PostgreSQL допускает только одну такую mutation job на logical
+document. `SUCCEEDED`, `FAILED` и `CANCELLED` терминальны и друг с другом не конфликтуют.
+Ошибка сохраняется только как allow-listed классификационный код; произвольные
+сообщения, traceback и credentials в jobs не записываются.
+Архитектурное решение: [ADR 0015](decisions/0015-durable-indexing-jobs.md).
 
 ---
 

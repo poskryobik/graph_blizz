@@ -314,12 +314,12 @@
       "id": "F028",
       "title": "[MVP] Persist durable indexing jobs",
       "behavior": "Создаётся jobs state machine PENDING, RUNNING, RETRY, SUCCEEDED, FAILED, CANCELLED с attempts, lease/heartbeat, timestamps и safe error metadata. Для одного document запрещены конфликтующие active mutation jobs.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F027"
       ],
       "verification": "pytest -q tests/unit/jobs/test_job_model.py tests/integration/test_job_constraints.py",
-      "evidence": ""
+      "evidence": "Independent verification iteration 3 passed all F028 criteria after closing domain/database consistency and regression-coverage gaps. Jobs persist the explicit PENDING/RUNNING/RETRY/SUCCEEDED/FAILED/CANCELLED lifecycle against immutable document revisions, with mirrored attempts, lease/heartbeat, timestamp, bounded error-code, and lease-owner constraints. PostgreSQL enforces one active mutation job per document via a partial unique index while terminal jobs release the slot. The required gate passed with 43 tests and 1 Docker-dependent skip; the full verification pipeline passed Ruff, formatting, mypy, 281 unit tests and the integration suite (14 passed, 13 skipped, 1 deselected). Offline Alembic DDL and diff checks passed; the live PostgreSQL constraint probes skipped only because Docker is unavailable."
     },
     {
       "id": "F029",
