@@ -22,6 +22,7 @@ class JobType(StrEnum):
     """Job operations understood by the current application."""
 
     INDEX_DOCUMENT = "INDEX_DOCUMENT"
+    DELETE_DOCUMENT = "DELETE_DOCUMENT"
 
 
 class JobErrorCode(StrEnum):

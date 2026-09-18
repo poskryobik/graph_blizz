@@ -271,6 +271,66 @@ class DocumentRepository:
         )
         return [self._document(row) for row in await cursor.fetchall()]
 
+    async def complete_deletion_for_job(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+        revision: int,
+        job_id: UUID,
+        lease_owner: str,
+        attempt: int,
+    ) -> Document | None:
+        """Atomically mark a document deleted and complete its owned live job."""
+        cursor = await self._connection.execute(
+            f"""
+            WITH completed_job AS (
+                UPDATE graph_blizz.jobs
+                SET status = 'SUCCEEDED', lease_owner = NULL,
+                    lease_expires_at = NULL, heartbeat_at = NULL,
+                    finished_at = now(), updated_at = now()
+                WHERE id = %s AND document_id = %s AND document_revision = %s
+                  AND job_type = 'DELETE_DOCUMENT'
+                  AND status = 'RUNNING' AND lease_owner = %s
+                  AND attempts = %s AND lease_expires_at > now()
+                  AND EXISTS (
+                      SELECT 1
+                      FROM graph_blizz.documents AS candidate
+                      JOIN graph_blizz.document_revisions AS candidate_revision
+                        ON candidate_revision.document_id = candidate.id
+                       AND candidate_revision.revision = candidate.active_revision
+                      WHERE candidate.workspace_id = %s
+                        AND candidate.id = %s
+                        AND candidate.status = 'DELETING'
+                        AND candidate.active_revision = %s
+                  )
+                RETURNING id
+            )
+            UPDATE graph_blizz.documents AS d
+            SET status = 'DELETED', updated_at = now()
+            FROM graph_blizz.document_revisions AS r, completed_job
+            WHERE d.workspace_id = %s AND d.id = %s AND d.status = 'DELETING'
+              AND d.active_revision = %s
+              AND r.document_id = d.id AND r.revision = d.active_revision
+            RETURNING {self._COLUMNS}
+            """,
+            (
+                job_id,
+                document_id,
+                revision,
+                lease_owner,
+                attempt,
+                workspace_id,
+                document_id,
+                revision,
+                workspace_id,
+                document_id,
+                revision,
+            ),
+        )
+        row = await cursor.fetchone()
+        return None if row is None else self._document(row)
+
     async def transition_status(
         self,
         *,

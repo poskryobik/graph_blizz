@@ -21,6 +21,7 @@ from backend.api.documents import (
 from backend.api.workspaces import get_workspace_repository
 from backend.documents import (
     Document,
+    DocumentDeleteResult,
     DocumentStatus,
     DocumentUpsertAction,
     DocumentUpsertResult,
@@ -183,6 +184,74 @@ def test_changed_put_exposes_pending_replacement() -> None:
     assert response.json()["status"] == "PENDING"
     assert response.json()["job_id"] == str(replacement_job.id)
     dependencies["sources"].upsert_for_indexing.assert_awaited_once()
+
+
+def test_delete_exposes_pending_job_and_is_workspace_scoped() -> None:
+    deletion_job = replace(JOB, type=JobType.DELETE_DOCUMENT)
+    response, dependencies = _request(
+        "DELETE",
+        f"/v1/workspaces/{WORKSPACE_ID}/documents/{DOCUMENT_ID}",
+        configure=lambda dependencies: setattr(
+            dependencies["sources"].delete_for_indexing,
+            "return_value",
+            DocumentDeleteResult(
+                document=replace(READY, status=DocumentStatus.DELETING),
+                job=deletion_job,
+            ),
+        ),
+    )
+
+    assert response.status_code == 202
+    assert response.json() == {
+        "id": str(DOCUMENT_ID),
+        "workspace_id": str(WORKSPACE_ID),
+        "revision": 1,
+        "status": "PENDING",
+        "job_id": str(deletion_job.id),
+    }
+    dependencies["sources"].delete_for_indexing.assert_awaited_once_with(
+        jobs=dependencies["jobs"],
+        workspace_id=WORKSPACE_ID,
+        document_id=DOCUMENT_ID,
+    )
+
+
+def test_delete_semantics_for_missing_conflict_and_deleted() -> None:
+    missing, _ = _request(
+        "DELETE",
+        f"/v1/workspaces/{WORKSPACE_ID}/documents/{DOCUMENT_ID}",
+        configure=lambda dependencies: setattr(
+            dependencies["sources"].delete_for_indexing,
+            "side_effect",
+            LookupError("missing"),
+        ),
+    )
+    conflict, _ = _request(
+        "DELETE",
+        f"/v1/workspaces/{WORKSPACE_ID}/documents/{DOCUMENT_ID}",
+        configure=lambda dependencies: setattr(
+            dependencies["sources"].delete_for_indexing,
+            "side_effect",
+            RuntimeError("active mutation"),
+        ),
+    )
+    deleted, _ = _request(
+        "DELETE",
+        f"/v1/workspaces/{WORKSPACE_ID}/documents/{DOCUMENT_ID}",
+        configure=lambda dependencies: setattr(
+            dependencies["sources"].delete_for_indexing,
+            "return_value",
+            DocumentDeleteResult(
+                document=replace(READY, status=DocumentStatus.DELETED), job=None
+            ),
+        ),
+    )
+
+    assert missing.status_code == 404
+    assert conflict.status_code == 409
+    assert deleted.status_code == 200
+    assert deleted.json()["status"] == "DELETED"
+    assert deleted.json()["job_id"] is None
 
 
 def test_upload_rejects_paths_and_unsupported_types_before_storage() -> None:

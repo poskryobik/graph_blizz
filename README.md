@@ -96,6 +96,13 @@ immutable revision, атомарно создаёт durable job и сразу в
 документ в `UPDATING`, но сохраняет прежнюю revision активной до полного успеха
 replacement job. Worker удаляет старую индексированную версию через lifecycle
 LightRAG, индексирует новую и атомарно переключает document в `READY`.
+`DELETE /v1/workspaces/{workspace_id}/documents/{document_id}` возвращает
+`202` с `status=PENDING` и `job_id`, переводя документ в `DELETING`. Worker
+использует поддерживаемый lifecycle LightRAG и только после подтверждённого
+удаления атомарно фиксирует `DELETED`. Повтор в `DELETING` возвращает тот же job,
+повтор в `DELETED` — `200` без job; отсутствующий или чужой документ даёт `404`,
+а другая активная mutation — `409`. Immutable source revisions и их MinIO-объекты
+в MVP сохраняются бессрочно; отдельной автоматической очистки пока нет.
 
 ### GPU embeddings через vLLM
 
@@ -348,3 +355,4 @@ responses никогда не логируются. Решение и его о�
 - [ADR 0014: неизменяемые ревизии документов](docs/architecture/decisions/0014-immutable-document-revisions.md)
 - [ADR 0016: leased PostgreSQL worker для indexing jobs](docs/architecture/decisions/0016-leased-rag-worker.md)
 - [ADR 0017: замена индексированного документа через lifecycle LightRAG](docs/architecture/decisions/0017-lightrag-document-replacement.md)
+- [ADR 0018: durable удаление документа через lifecycle LightRAG](docs/architecture/decisions/0018-durable-document-deletion.md)

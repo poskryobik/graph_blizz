@@ -16,7 +16,7 @@ from backend.documents import (
     DocumentStatus,
 )
 from backend.indexing import IndexingService
-from backend.jobs import Job, JobErrorCode, JobRepository
+from backend.jobs import Job, JobErrorCode, JobRepository, JobType
 from backend.parsers import create_default_parser_registry
 from backend.rag import LightRAGRuntimeRegistry
 from backend.security import (
@@ -158,7 +158,10 @@ class IndexingJobProcessor:
             )
             if document is None:
                 raise LookupError("job document revision is unavailable")
-            if document.status is DocumentStatus.READY:
+            if (
+                document.status is DocumentStatus.READY
+                and job.type is JobType.INDEX_DOCUMENT
+            ):
                 return
             active = await documents.get(workspace_id, job.document_id)
             if active is None:
@@ -185,9 +188,19 @@ class IndexingJobProcessor:
                 storage_key=workspace.storage_key,
                 permissions=ALL_OWNER_PERMISSIONS,
             )
+            sources = DocumentSourceService(documents, self._object_store)
+            if job.type is JobType.DELETE_DOCUMENT:
+                await self._delete(
+                    documents=documents,
+                    sources=sources,
+                    context=context,
+                    document=document,
+                    job=job,
+                )
+                return
             service = IndexingService(
                 documents,
-                DocumentSourceService(documents, self._object_store),
+                sources,
                 self._parsers,
                 self._runtimes,
             )
@@ -197,7 +210,7 @@ class IndexingJobProcessor:
             ):
                 await self._replace(
                     documents=documents,
-                    sources=DocumentSourceService(documents, self._object_store),
+                    sources=sources,
                     context=context,
                     active=active,
                     replacement=document,
@@ -234,6 +247,35 @@ class IndexingJobProcessor:
         )
         if completed is None:
             raise RuntimeError("replacement job lease ownership was lost")
+        await documents.commit()
+
+    async def _delete(
+        self,
+        *,
+        documents: LeasedDocumentRepository,
+        sources: DocumentSourceService,
+        context: AuthorizedWorkspaceContext,
+        document: Document,
+        job: Job,
+    ) -> None:
+        """Delete the exact active LightRAG document, then complete atomically."""
+        if document.status is not DocumentStatus.DELETING:
+            raise RuntimeError("document is not deleting")
+        if document.active_revision != job.document_revision:
+            raise RuntimeError("deletion job revision is not active")
+        content = self._parse(sources, document)
+        runtime = await self._runtimes.get(context)
+        await runtime.rag.adelete_by_doc_id(compute_mdhash_id(content, prefix="doc-"))
+        completed = await documents.complete_deletion_for_job(
+            workspace_id=context.workspace_id,
+            document_id=document.id,
+            revision=job.document_revision,
+            job_id=job.id,
+            lease_owner=job.lease_owner or "",
+            attempt=job.attempts,
+        )
+        if completed is None:
+            raise RuntimeError("deletion job lease ownership was lost")
         await documents.commit()
 
     def _parse(self, sources: DocumentSourceService, document: Document) -> str:

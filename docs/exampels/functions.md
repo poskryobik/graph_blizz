@@ -100,6 +100,22 @@ curl -X PUT -F 'file=@guide-v2.md;type=text/markdown' \
 # {"action":"updated","revision":2,"status":"PENDING","job_id":"...",...}
 ```
 
+## Удаление документа
+
+`DELETE` атомарно переводит готовый документ в `DELETING` и создаёт durable job
+для его active revision. Worker вызывает `LightRAG.adelete_by_doc_id` и только
+после успеха фиксирует `DELETED`. Immutable source revisions и объекты сохраняются
+для аудита и retry согласно retention policy MVP.
+
+### Example
+
+```bash
+curl -X DELETE \
+  http://localhost:8000/v1/workspaces/12345678-1234-5678-1234-567812345678/documents/aaaaaaaa-1234-5678-1234-567812345678
+
+# {"revision":1,"status":"PENDING","job_id":"...",...}
+```
+
 ## Проверка соединения с Neo4j
 
 `Neo4jConnectivity` проверяет доступность настроенного Neo4j через Bolt и

@@ -1147,5 +1147,6 @@ OIDC principal
 
 ## Architecture decisions
 
+- [0018 — Durable удаление документа через lifecycle LightRAG](decisions/0018-durable-document-deletion.md)
 - [0017 — Замена индексированного документа через lifecycle LightRAG](decisions/0017-lightrag-document-replacement.md)
 - [0009 — Единый клиент embeddings](decisions/0009-shared-embedding-client.md)

@@ -10,7 +10,7 @@ import pytest
 
 pytestmark = pytest.mark.integration
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-REVISION = "20260918_0006"
+REVISION = "20260918_0007"
 
 
 @pytest.fixture(scope="module")
@@ -77,12 +77,22 @@ def test_fresh_and_repeated_upgrade_reach_head(
     _upgrade(project, environment)
     first_snapshot = _schema_snapshot(project, environment)
     assert first_snapshot == f"graph_blizz|alembic_version|{REVISION}"
-    assert "UPDATING" in _psql(
+    document_status_constraint = _psql(
         project,
         environment,
         "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
         "WHERE connamespace = 'graph_blizz'::regnamespace "
         "AND conname = 'ck_documents_status';",
+    )
+    assert {"UPDATING", "DELETING", "DELETED"} <= set(
+        document_status_constraint.split("'")[1::2]
+    )
+    assert "DELETE_DOCUMENT" in _psql(
+        project,
+        environment,
+        "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+        "WHERE connamespace = 'graph_blizz'::regnamespace "
+        "AND conname = 'ck_jobs_job_type';",
     )
 
     _upgrade(project, environment)

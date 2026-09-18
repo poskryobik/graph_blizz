@@ -8,12 +8,14 @@ from backend.documents.models import (
 )
 from backend.documents.repository import DocumentRepository, DocumentScopeConflictError
 from backend.documents.source_service import (
+    DocumentDeleteResult,
     DocumentSourceService,
     DocumentUpsertResult,
 )
 
 __all__ = [
     "Document",
+    "DocumentDeleteResult",
     "DocumentRepository",
     "DocumentRevision",
     "DocumentScopeConflictError",

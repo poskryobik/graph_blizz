@@ -58,6 +58,39 @@ class JobRepository:
         row = await cursor.fetchone()
         return None if row is None else self._job(row)
 
+    async def create_deletion(
+        self, *, document_id: UUID, document_revision: int, max_attempts: int = 3
+    ) -> Job:
+        """Create a pending deletion job for the exact active revision."""
+        cursor = await self._connection.execute(
+            f"""
+            INSERT INTO graph_blizz.jobs (
+                document_id, document_revision, job_type, max_attempts
+            ) VALUES (%s, %s, %s, %s)
+            RETURNING {self._COLUMNS}
+            """,
+            (
+                document_id,
+                document_revision,
+                JobType.DELETE_DOCUMENT.value,
+                max_attempts,
+            ),
+        )
+        return self._job(await cursor.fetchone())
+
+    async def get_active_for_document(self, document_id: UUID) -> Job | None:
+        """Return the single active mutation job for a document, if any."""
+        cursor = await self._connection.execute(
+            f"""
+            SELECT {self._COLUMNS}
+            FROM graph_blizz.jobs
+            WHERE document_id = %s AND status IN ('PENDING', 'RUNNING', 'RETRY')
+            """,
+            (document_id,),
+        )
+        row = await cursor.fetchone()
+        return None if row is None else self._job(row)
+
     async def claim_next(self, *, owner: str, lease_for: timedelta) -> Job | None:
         """Atomically claim one available job without blocking other workers."""
         self._validate_lease(owner, lease_for)

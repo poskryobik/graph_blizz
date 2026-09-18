@@ -371,12 +371,12 @@
       "id": "F033",
       "title": "[MVP] Implement document deletion workflow",
       "behavior": "DELETE создаёт durable job, переводит document в DELETING, вызывает LightRAG deletion и после подтверждения фиксирует DELETED. Source revisions сохраняются согласно простой retention policy.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F032"
       ],
       "verification": "pytest -q tests/unit/workflows/test_document_delete.py tests/integration/test_document_delete.py",
-      "evidence": ""
+      "evidence": "Independent verification iteration 2 passed all F033 criteria. Public DemoOwner DELETE atomically creates a durable DELETE_DOCUMENT job and moves READY documents to DELETING, preserves workspace isolation, and provides explicit idempotent DELETING/DELETED semantics. The production worker claims the real PENDING job, processes it under the document advisory lock, calls only supported LightRAG deletion for the exact active revision, and atomically sets DELETED plus SUCCEEDED under job type, document/revision, owner, attempt, and live-lease fences. Failures and stale workers do not prematurely delete the document; immutable revision rows and source objects are retained under the documented MVP policy. The exact focused gate passed 6 tests, related API/F031/F032 regressions passed 22 tests, the full unit suite passed 301 tests, and Ruff, formatting, mypy, and git diff checks passed. Migration 20260918_0007 and its DELETING/DELETED and DELETE_DOCUMENT constraints were exercised. Broad integration infrastructure errors were unrelated Docker port/startup and external Qdrant timeout failures; the exact F033 Docker gate passed."
     },
     {
       "id": "F034",

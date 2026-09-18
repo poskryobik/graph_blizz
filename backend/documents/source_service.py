@@ -12,7 +12,7 @@ from backend.documents.models import (
     DocumentUpsertAction,
 )
 from backend.documents.repository import DocumentRepository
-from backend.jobs import Job, JobRepository
+from backend.jobs import Job, JobRepository, JobType
 from backend.storage import ObjectStorageError, ObjectStore
 
 
@@ -21,6 +21,14 @@ class DocumentUpsertResult:
     """Document upsert outcome and an optional newly-created indexing job."""
 
     action: DocumentUpsertAction
+    document: Document
+    job: Job | None
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentDeleteResult:
+    """Idempotent deletion request outcome and its active job, if any."""
+
     document: Document
     job: Job | None
 
@@ -71,6 +79,51 @@ class DocumentSourceService:
                 self._object_store.delete(object_key)
             except ObjectStorageError:
                 pass
+            raise
+
+    async def delete_for_indexing(
+        self,
+        *,
+        jobs: JobRepository,
+        workspace_id: UUID,
+        document_id: UUID,
+    ) -> DocumentDeleteResult:
+        """Atomically enqueue deletion of a ready document's active revision.
+
+        Repeated calls while deletion is active return the existing mutation job;
+        already-deleted documents return a stable result without creating work.
+        """
+        try:
+            document = await self._repository.lock_for_upsert(
+                workspace_id=workspace_id, document_id=document_id
+            )
+            if document is None:
+                raise LookupError("document does not exist")
+            if document.status is DocumentStatus.DELETED:
+                await self._repository.commit()
+                return DocumentDeleteResult(document=document, job=None)
+            if document.status is DocumentStatus.DELETING:
+                job = await jobs.get_active_for_document(document_id)
+                if job is None or job.type is not JobType.DELETE_DOCUMENT:
+                    raise RuntimeError("deleting document has no active deletion job")
+                await self._repository.commit()
+                return DocumentDeleteResult(document=document, job=job)
+            deleting = await self._repository.transition_status(
+                workspace_id=workspace_id,
+                document_id=document_id,
+                from_status=DocumentStatus.READY,
+                to_status=DocumentStatus.DELETING,
+            )
+            if deleting is None:
+                raise RuntimeError("document is not ready for deletion")
+            job = await jobs.create_deletion(
+                document_id=document_id,
+                document_revision=document.active_revision,
+            )
+            await self._repository.commit()
+            return DocumentDeleteResult(document=deleting, job=job)
+        except BaseException:
+            await self._rollback()
             raise
 
     async def store_for_indexing(

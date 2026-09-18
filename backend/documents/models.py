@@ -13,6 +13,8 @@ class DocumentStatus(StrEnum):
     INDEXING = "INDEXING"
     READY = "READY"
     UPDATING = "UPDATING"
+    DELETING = "DELETING"
+    DELETED = "DELETED"
     FAILED = "FAILED"
 
 

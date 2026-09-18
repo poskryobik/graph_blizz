@@ -15,6 +15,7 @@
 
 ### Added
 
+- Public `DELETE` документа теперь создаёт durable deletion job; worker удаляет индекс через LightRAG и только после успеха атомарно фиксирует `DELETED`, сохраняя source revisions (F033).
 - Изменённый document `PUT` теперь создаёт immutable replacement revision и durable job; worker заменяет LightRAG-индекс и активирует revision только после полного успеха (F032).
 - Public document upload теперь атомарно сохраняет immutable revision и durable indexing job, возвращая `PENDING`, `revision` и `job_id` без inline indexing (F030).
 - Добавлен отдельный `rag-worker` с атомарным PostgreSQL claiming, lease/heartbeat, retry, recovery истёкших jobs и graceful shutdown (F029).

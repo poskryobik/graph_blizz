@@ -7,7 +7,16 @@ from typing import Annotated, cast
 from uuid import UUID, uuid4
 
 import psycopg
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from pydantic import BaseModel
 
 from backend.api.workspaces import _authorize, get_workspace_repository
@@ -55,6 +64,16 @@ class DocumentUploadResponse(BaseModel):
     job_id: UUID | None
     created_at: datetime
     updated_at: datetime
+
+
+class DocumentDeleteResponse(BaseModel):
+    """Public asynchronous or already-completed deletion outcome."""
+
+    id: UUID
+    workspace_id: UUID
+    revision: int
+    status: DocumentStatus | JobStatus
+    job_id: UUID | None
 
 
 async def get_document_repository(
@@ -228,6 +247,41 @@ async def list_documents(
     workspace = await _workspace_or_404(workspace_repository, workspace_id)
     await _authorize(request, workspace, Permission.DOCUMENT_READ)
     return [_response(document) for document in await repository.list(workspace_id)]
+
+
+@router.delete("/{document_id}", response_model=DocumentDeleteResponse)
+async def delete_document(
+    workspace_id: UUID,
+    document_id: UUID,
+    request: Request,
+    response: Response,
+    sources: Annotated[DocumentSourceService, Depends(get_source_service)],
+    jobs: Annotated[JobRepository, Depends(get_job_repository)],
+    workspace_repository: Annotated[
+        WorkspaceRepository, Depends(get_workspace_repository)
+    ],
+) -> DocumentDeleteResponse:
+    """Authorize and durably enqueue deletion of one workspace document."""
+    workspace = await _workspace_or_404(workspace_repository, workspace_id)
+    await _authorize(request, workspace, Permission.DOCUMENT_DELETE)
+    try:
+        result = await sources.delete_for_indexing(
+            jobs=jobs, workspace_id=workspace_id, document_id=document_id
+        )
+    except (DocumentScopeConflictError, LookupError) as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT) from error
+    response.status_code = (
+        status.HTTP_200_OK if result.job is None else status.HTTP_202_ACCEPTED
+    )
+    return DocumentDeleteResponse(
+        id=result.document.id,
+        workspace_id=result.document.workspace_id,
+        revision=result.document.active_revision,
+        status=result.document.status if result.job is None else result.job.status,
+        job_id=None if result.job is None else result.job.id,
+    )
 
 
 @router.get("/{document_id}", response_model=DocumentResponse)
