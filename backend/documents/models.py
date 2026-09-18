@@ -29,3 +29,15 @@ class Document:
     status: DocumentStatus
     created_at: datetime
     updated_at: datetime
+    active_revision: int = 1
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentRevision:
+    """Immutable source metadata for one numbered document revision."""
+
+    document_id: UUID
+    revision: int
+    object_uri: str
+    content_hash: str
+    created_at: datetime

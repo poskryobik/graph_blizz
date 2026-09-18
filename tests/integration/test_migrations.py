@@ -10,7 +10,7 @@ import pytest
 
 pytestmark = pytest.mark.integration
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-REVISION = "20260917_0003"
+REVISION = "20260918_0004"
 
 
 @pytest.fixture(scope="module")

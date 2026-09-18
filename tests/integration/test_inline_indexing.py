@@ -22,7 +22,7 @@ def test_inline_indexing_uses_stored_markdown_and_authorized_runtime() -> None:
     document_id = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
     document = _document(workspace_id, document_id)
     object_store = MagicMock()
-    object_store.get.return_value = b"# Heading\n\nBody\n"
+    object_store.get_uri.return_value = b"# Heading\n\nBody\n"
     source_service = DocumentSourceService(MagicMock(), object_store)
     statuses: list[DocumentStatus] = []
     repository = MagicMock()
@@ -54,9 +54,7 @@ def test_inline_indexing_uses_stored_markdown_and_authorized_runtime() -> None:
 
     ready = asyncio.run(service.index(workspace, document))
 
-    object_store.get.assert_called_once_with(
-        f"workspace/{workspace_id}/document/{document_id}/source"
-    )
+    object_store.get_uri.assert_called_once_with(document.object_uri)
     runtime_registry.get.assert_awaited_once_with(workspace)
     rag.ainsert.assert_awaited_once_with("# Heading\n\nBody\n")
     assert statuses == [DocumentStatus.INDEXING, DocumentStatus.READY]
@@ -94,7 +92,7 @@ def test_failed_status_survives_request_transaction_rollback() -> None:
     repository.commit = AsyncMock(side_effect=commit)
     repository.rollback = AsyncMock(side_effect=rollback)
     object_store = MagicMock()
-    object_store.get.return_value = b"not utf-8: \xff"
+    object_store.get_uri.return_value = b"not utf-8: \xff"
     service = IndexingService(
         repository,
         DocumentSourceService(repository, object_store),

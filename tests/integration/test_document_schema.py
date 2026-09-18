@@ -65,11 +65,14 @@ def test_document_defaults_and_workspace_local_source_identity(
     created = _psql(
         project,
         environment,
-        "INSERT INTO graph_blizz.documents "
-        "(workspace_id, source_key, filename, source_type, object_uri, content_hash) "
-        f"VALUES ('{workspace_id}', 'source', 'source.pdf', 'application/pdf', "
-        "'s3://documents/source', 'abc') RETURNING status || '|' || "
-        "(created_at IS NOT NULL) || '|' || (updated_at IS NOT NULL);",
+        "WITH d AS (INSERT INTO graph_blizz.documents "
+        "(workspace_id, source_key, filename, source_type) "
+        f"VALUES ('{workspace_id}', 'source', 'source.pdf', 'application/pdf') "
+        "RETURNING *), r AS (INSERT INTO graph_blizz.document_revisions "
+        "(document_id, revision, object_uri, content_hash) "
+        "SELECT id, 1, 's3://documents/source', 'abc' FROM d) "
+        "SELECT status || '|' || (created_at IS NOT NULL) || '|' || "
+        "(updated_at IS NOT NULL) FROM d;",
     )
     assert created == "UPLOADED|true|true"
 
@@ -88,9 +91,8 @@ def test_document_defaults_and_workspace_local_source_identity(
         "ON_ERROR_STOP=1",
         "-c",
         "INSERT INTO graph_blizz.documents "
-        "(workspace_id, source_key, filename, source_type, object_uri, content_hash) "
-        f"VALUES ('{workspace_id}', 'source', 'copy.pdf', 'application/pdf', "
-        "'s3://documents/copy', 'def');",
+        "(workspace_id, source_key, filename, source_type) "
+        f"VALUES ('{workspace_id}', 'source', 'copy.pdf', 'application/pdf');",
         check=False,
         timeout=30,
     )
@@ -127,9 +129,9 @@ def test_document_status_and_workspace_foreign_key_are_enforced(
         project,
         environment,
         "INSERT INTO graph_blizz.documents "
-        "(workspace_id, source_key, filename, source_type, object_uri, content_hash) "
+        "(workspace_id, source_key, filename, source_type) "
         "VALUES ('00000000-0000-0000-0000-000000000000', 'missing', 'missing', "
-        "'text/plain', 's3://documents/missing', 'abc');",
+        "'text/plain');",
     )
     assert "fk_documents_workspace_id_workspaces" in invalid_workspace
 

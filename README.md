@@ -246,6 +246,8 @@ multipart-запросом `POST /v1/workspaces/{workspace_id}/documents` в п�
 выполняет inline indexing, поэтому успешный ответ `201` уже содержит статус
 `READY` и может выполняться долго. Ошибка indexing возвращает `502`, а сохранённая
 metadata переходит в `FAILED`; временная ошибка object storage возвращает `503`.
+Каждый новый source сохраняется под неизменяемым ключом с номером ревизии;
+логический `document_id` остаётся стабильным, а Demo API читает активную ревизию.
 
 Список и отдельная metadata читаются через
 `GET /v1/workspaces/{workspace_id}/documents` и
@@ -315,3 +317,4 @@ responses никогда не логируются. Решение и его о�
 - [ADR 0011: LightRAG Core как граница storage и model runtime](docs/architecture/decisions/0011-lightrag-storage-runtime-wiring.md)
 - [ADR 0012: реестр LightRAG runtime по авторизованному workspace](docs/architecture/decisions/0012-workspace-runtime-registry.md)
 - [ADR 0013: Demo query service с workspace-scoped sources](docs/architecture/decisions/0013-demo-query-service.md)
+- [ADR 0014: неизменяемые ревизии документов](docs/architecture/decisions/0014-immutable-document-revisions.md)

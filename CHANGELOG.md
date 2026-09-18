@@ -12,6 +12,7 @@
 
 ### Added
 
+- Добавлены неизменяемые ревизии документов со стабильным `document_id`, последовательными номерами, revision-specific object keys и безопасной миграцией Demo-документов в ревизию 1 (F027).
 - Добавлены идемпотентная инициализация Demo через `scripts/init.sh` с проверкой API и model endpoints, обязательный regression gate `scripts/verify-demo.sh` и copy-paste сценарий API без авторизации.
 - Добавлен `POST /v1/workspaces/{id}/query` с Demo-owner авторизацией, Graph RAG ответом, уникальным `request_id` и минимальными workspace-scoped sources.
 - Добавлены Demo-owner upload/list/get endpoints документов с серверными storage-ключами и синхронным inline indexing до `READY` или `FAILED`.

@@ -28,6 +28,7 @@ def _row() -> tuple[object, ...]:
         "UPLOADED",
         CREATED_AT,
         CREATED_AT,
+        1,
     )
 
 
@@ -61,6 +62,7 @@ def test_create_leaves_identity_status_and_timestamps_to_database() -> None:
     assert "status" not in insert_clause
     assert "created_at" not in insert_clause
     assert parameters == (
+        None,
         WORKSPACE_ID,
         "source.pdf",
         "source.pdf",
@@ -87,7 +89,7 @@ def test_create_accepts_service_generated_document_id() -> None:
     )
 
     statement, parameters = connection.execute.await_args.args
-    assert "(\n                id, workspace_id" in statement
+    assert "id, workspace_id" in statement
     assert parameters[0] == DOCUMENT_ID
 
 
@@ -97,7 +99,7 @@ def test_get_returns_document_and_missing_document() -> None:
     assert document is not None
     assert document.id == DOCUMENT_ID
     statement, parameters = connection.execute.await_args.args
-    assert "WHERE workspace_id = %s AND id = %s" in statement
+    assert "WHERE d.workspace_id = %s AND d.id = %s" in statement
     assert parameters == (WORKSPACE_ID, DOCUMENT_ID)
 
     connection.execute.return_value.fetchone.return_value = None
@@ -110,14 +112,14 @@ def test_list_scopes_documents_to_workspace() -> None:
     documents = asyncio.run(repository.list(WORKSPACE_ID))
 
     statement, parameters = connection.execute.await_args.args
-    assert "WHERE workspace_id = %s" in statement
-    assert "ORDER BY created_at, id" in statement
+    assert "WHERE d.workspace_id = %s" in statement
+    assert "ORDER BY d.created_at, d.id" in statement
     assert parameters == (WORKSPACE_ID,)
     assert [document.id for document in documents] == [DOCUMENT_ID]
 
 
 def test_transition_status_is_atomic_and_returns_updated_document() -> None:
-    row = (*_row()[:7], "INDEXING", _row()[8], _row()[9])
+    row = (*_row()[:7], "INDEXING", _row()[8], _row()[9], _row()[10])
     repository, connection, _ = _repository(row)
 
     document = asyncio.run(
@@ -130,7 +132,7 @@ def test_transition_status_is_atomic_and_returns_updated_document() -> None:
     )
 
     statement, parameters = connection.execute.await_args.args
-    assert "WHERE workspace_id = %s AND id = %s AND status = %s" in statement
+    assert "d.workspace_id = %s AND d.id = %s AND d.status = %s" in statement
     assert parameters == ("INDEXING", WORKSPACE_ID, DOCUMENT_ID, "UPLOADED")
     assert document is not None
     assert document.status is DocumentStatus.INDEXING

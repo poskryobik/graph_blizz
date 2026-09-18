@@ -45,6 +45,27 @@ service = IndexingService(repository, source_service, parser_registry, runtimes)
 ready_document = await service.index(authorized_workspace, uploaded_document)
 ```
 
+## Добавление ревизии документа
+
+`DocumentSourceService` сохраняет новые bytes под отдельным номерным object key и
+регистрирует следующую ревизию, не меняя `document_id`. Активация выполняется
+отдельно после успешной обработки.
+
+### Example
+
+```python
+revision = await source_service.add_revision(
+    document=current_document,
+    content=updated_source,
+)
+await repository.activate_revision(
+    workspace_id=current_document.workspace_id,
+    document_id=current_document.id,
+    revision=revision.revision,
+)
+await repository.commit()
+```
+
 ## Проверка соединения с Neo4j
 
 `Neo4jConnectivity` проверяет доступность настроенного Neo4j через Bolt и

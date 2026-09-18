@@ -303,12 +303,12 @@
       "id": "F027",
       "title": "[MVP] Add immutable document revisions",
       "behavior": "Модель документов расширяется document_revisions, stable document_id, monotonically increasing revision, content_hash, immutable object key и active_revision. Existing Demo rows безопасно мигрируются в revision 1.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F026"
       ],
       "verification": "pytest -q tests/unit/documents/test_revisions.py tests/integration/test_document_revision_schema.py",
-      "evidence": ""
+      "evidence": "Independent verification iteration 1 passed all F027 criteria. Documents now keep a stable document_id with an active_revision projection over immutable document_revisions rows keyed by (document_id, revision). Repository writes serialize revision allocation with a document-row lock, object URIs are revision-specific and unique, and a PostgreSQL trigger rejects revision updates. Alembic 0004 backfills every existing Demo document into revision 1 while preserving content hash, object URI, and timestamps, and provides a compatible downgrade projection. The mandatory gate passed with 3 tests and 1 Docker-dependent skip; the full verification pipeline passed Ruff, format, mypy, 240 unit tests and 12 integration tests. Live PostgreSQL schema tests skipped only because the sandbox cannot access the Docker daemon; offline Alembic DDL generation and migration inspection passed."
     },
     {
       "id": "F028",

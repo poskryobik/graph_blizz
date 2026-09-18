@@ -82,6 +82,18 @@ def test_get_returns_bytes_and_closes_response_body(
     body.close.assert_called_once_with()
 
 
+def test_get_uri_resolves_only_the_configured_bucket(
+    store: ObjectStore, client: MagicMock
+) -> None:
+    body = MagicMock(wraps=BytesIO(b"legacy source"))
+    client.get_object.return_value = {"Body": body}
+
+    assert store.get_uri("s3://documents/legacy/source") == b"legacy source"
+    client.get_object.assert_called_once_with(Bucket="documents", Key="legacy/source")
+    with pytest.raises(ObjectStorageError, match="configured bucket"):
+        store.get_uri("s3://other/source")
+
+
 def test_get_maps_missing_object_to_domain_error(
     store: ObjectStore, client: MagicMock
 ) -> None:

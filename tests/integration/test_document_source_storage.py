@@ -122,8 +122,11 @@ def test_source_remains_retrievable_after_downstream_indexing_failure(
                     raise AssertionError("indexing failure was not propagated")
 
                 cursor = await connection.execute(
-                    "SELECT id, object_uri, content_hash, status "
-                    "FROM graph_blizz.documents WHERE workspace_id = %s",
+                    "SELECT d.id, r.object_uri, r.content_hash, d.status "
+                    "FROM graph_blizz.documents AS d "
+                    "JOIN graph_blizz.document_revisions AS r "
+                    "ON r.document_id = d.id AND r.revision = d.active_revision "
+                    "WHERE d.workspace_id = %s",
                     (workspace_id,),
                 )
                 document_id, object_uri, content_hash, status = await cursor.fetchone()

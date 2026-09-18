@@ -13,7 +13,7 @@ pytestmark = pytest.mark.unit
 
 WORKSPACE_ID = UUID("12345678-1234-5678-1234-567812345678")
 DOCUMENT_ID = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
-OBJECT_KEY = f"workspace/{WORKSPACE_ID}/document/{DOCUMENT_ID}/source"
+OBJECT_KEY = f"workspace/{WORKSPACE_ID}/document/{DOCUMENT_ID}/revision/1/source"
 
 
 def test_store_persists_exact_bytes_before_metadata() -> None:
@@ -83,11 +83,11 @@ def test_store_removes_source_when_metadata_commit_fails() -> None:
     store.delete.assert_called_once_with(OBJECT_KEY)
 
 
-def test_demo_key_has_workspace_and_document_but_no_revision() -> None:
+def test_key_has_workspace_document_and_revision() -> None:
     key = DocumentSourceService.object_key(WORKSPACE_ID, DOCUMENT_ID)
 
     assert key == OBJECT_KEY
-    assert "revision" not in key
+    assert "/revision/1/" in key
 
 
 def _document(**values: object) -> Document:

@@ -100,6 +100,13 @@ class ObjectStore:
         except BotoCoreError as error:
             raise ObjectStorageError(f"failed to get object {key!r}") from error
 
+    def get_uri(self, uri: str) -> bytes:
+        """Return bytes addressed by a stable URI from this store's bucket."""
+        prefix = f"s3://{self._bucket}/"
+        if not uri.startswith(prefix) or len(uri) == len(prefix):
+            raise ObjectStorageError("object URI does not belong to configured bucket")
+        return self.get(uri[len(prefix) :])
+
     def delete(self, key: str) -> None:
         """Delete ``key``; deleting an absent object is successful.
 

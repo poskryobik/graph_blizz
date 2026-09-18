@@ -335,14 +335,14 @@ updated_at
 
 PostgreSQL хранит application metadata и позднее durable workflow state.
 
-### Demo
+### До F027
 
 ```text
 app.workspaces
 app.documents
 ```
 
-### MVP
+### С F027
 
 ```text
 app.document_revisions
@@ -391,7 +391,7 @@ Source object является основанием для retry/reindex/recover
 
 ---
 
-## 12. Document model — Demo
+## 12. Document model — до F027
 
 Минимальная таблица:
 
@@ -423,7 +423,7 @@ FAILED
 
 ---
 
-## 13. Document model — MVP
+## 13. Document model — с F027
 
 После Demo добавляются:
 
@@ -450,6 +450,11 @@ document_revisions
 `document_id` остаётся стабильным между версиями.
 
 Одинаковый SHA-256 при upsert означает idempotent NOOP.
+
+Новые source-объекты получают ключ
+`workspace/{workspace_id}/document/{document_id}/revision/{revision}/source`.
+Старые Demo-строки мигрируют в ревизию 1 с сохранением существующего URI; SQL
+migration не перемещает объекты в MinIO.
 
 ---
 
