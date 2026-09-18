@@ -230,14 +230,14 @@
       "id": "F021",
       "title": "[DEMO] Implement workspace-scoped LightRAG runtime registry",
       "behavior": "LightRAGRuntimeRegistry создаёт runtime по server-generated workspace.storage_key после получения AuthorizedWorkspaceContext. Реализуются lazy initialization и graceful close. Client не может выбрать physical namespace напрямую.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F008",
         "F009",
         "F020"
       ],
       "verification": "pytest -q tests/unit/rag/test_runtime_registry.py tests/integration/test_runtime_workspace_isolation.py",
-      "evidence": ""
+      "evidence": "Independent verification iteration 1 passed all criteria. Registry API accepts only AuthorizedWorkspaceContext and derives the physical namespace from server-generated storage_key. Focused tests: 6 passed, covering lazy initialization, concurrent singleton creation, retry after failure/cancellation, workspace isolation, idempotent close, and get/close races. Adversarial probes confirmed close-waiter cancellation safety, close failure semantics, no pending task leaks, and no raw namespace argument. Full verification passed Ruff, format, mypy, 203 unit tests and 6 integration tests (11 skipped, 1 deselected); git diff check passed."
     },
     {
       "id": "F022",

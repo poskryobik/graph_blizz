@@ -233,3 +233,4 @@ responses никогда не логируются. Решение и его о�
 - [ADR 0009: единый клиент embeddings](docs/architecture/decisions/0009-shared-embedding-client.md)
 - [ADR 0010: единый OpenAI-compatible LLM-клиент](docs/architecture/decisions/0010-shared-openai-compatible-llm-client.md)
 - [ADR 0011: LightRAG Core как граница storage и model runtime](docs/architecture/decisions/0011-lightrag-storage-runtime-wiring.md)
+- [ADR 0012: реестр LightRAG runtime по авторизованному workspace](docs/architecture/decisions/0012-workspace-runtime-registry.md)

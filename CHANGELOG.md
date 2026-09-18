@@ -11,6 +11,7 @@
 
 ### Added
 
+- Добавлен ленивый workspace-scoped реестр LightRAG runtime с namespace только из авторизованного контекста и graceful shutdown.
 - Добавлена pinned-зависимость LightRAG Core и production factory для PostgreSQL/Qdrant/Neo4j с общими внешними embedding и LLM клиентами.
 - Локальная Ollama с `qwen3:1.7b` стала внешним LLM по умолчанию; Compose подключается к host endpoint с Linux-compatible alias и сохраняет переопределения для других провайдеров.
 - Добавлен единый async OpenAI-compatible LLM-клиент для extraction и generation с общей моделью, timeout и стабильными transport/HTTP/protocol ошибками.
