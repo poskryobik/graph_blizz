@@ -18,9 +18,8 @@ from backend.documents import (
     DocumentSourceService,
     DocumentStatus,
 )
-from backend.indexing import IndexingService
+from backend.jobs import JobRepository, JobStatus
 from backend.parsers import ParserRegistry, UnsupportedDocumentTypeError
-from backend.rag import LightRAGRuntimeRegistry
 from backend.security import Permission
 from backend.storage import ObjectStorageError, ObjectStore
 from backend.workspaces import Workspace, WorkspaceRepository
@@ -37,6 +36,20 @@ class DocumentResponse(BaseModel):
     filename: str
     source_type: str
     status: DocumentStatus
+    created_at: datetime
+    updated_at: datetime
+
+
+class DocumentUploadResponse(BaseModel):
+    """Accepted document revision and its durable indexing job."""
+
+    id: UUID
+    workspace_id: UUID
+    filename: str
+    source_type: str
+    revision: int
+    status: JobStatus
+    job_id: UUID
     created_at: datetime
     updated_at: datetime
 
@@ -68,35 +81,30 @@ def get_source_service(
     )
 
 
-def get_indexing_service(
-    request: Request,
+def get_job_repository(
     repository: Annotated[DocumentRepository, Depends(get_document_repository)],
-    sources: Annotated[DocumentSourceService, Depends(get_source_service)],
-) -> IndexingService:
-    """Build inline indexing from app-owned parser and runtime registries."""
-    return IndexingService(
-        repository,
-        sources,
-        cast(ParserRegistry, request.app.state.parser_registry),
-        cast(LightRAGRuntimeRegistry, request.app.state.runtime_registry),
-    )
+) -> JobRepository:
+    """Build durable job persistence on the document transaction connection."""
+    return JobRepository(repository.connection)
 
 
-@router.post("", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=DocumentUploadResponse, status_code=status.HTTP_201_CREATED
+)
 async def upload_document(
     workspace_id: UUID,
     request: Request,
     file: Annotated[UploadFile, File()],
     repository: Annotated[DocumentRepository, Depends(get_document_repository)],
     sources: Annotated[DocumentSourceService, Depends(get_source_service)],
-    indexing: Annotated[IndexingService, Depends(get_indexing_service)],
+    jobs: Annotated[JobRepository, Depends(get_job_repository)],
     workspace_repository: Annotated[
         WorkspaceRepository, Depends(get_workspace_repository)
     ],
-) -> DocumentResponse:
-    """Persist a supported source and synchronously index it for Demo use."""
+) -> DocumentUploadResponse:
+    """Persist a supported immutable source and enqueue durable indexing."""
     workspace = await _workspace_or_404(workspace_repository, workspace_id)
-    context = await _authorize(request, workspace, Permission.DOCUMENT_CREATE)
+    await _authorize(request, workspace, Permission.DOCUMENT_CREATE)
     filename = _safe_filename(file.filename)
     source_type = file.content_type or "application/octet-stream"
     parsers = cast(ParserRegistry, request.app.state.parser_registry)
@@ -115,7 +123,8 @@ async def upload_document(
     if len(content) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
     try:
-        document = await sources.store(
+        document, job = await sources.store_for_indexing(
+            jobs=jobs,
             workspace_id=workspace_id,
             source_key=f"upload-{uuid4()}",
             filename=filename,
@@ -124,14 +133,17 @@ async def upload_document(
         )
     except ObjectStorageError as error:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE) from error
-    try:
-        document = await indexing.index(context, document)
-    except Exception as error:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="document indexing failed",
-        ) from error
-    return _response(document)
+    return DocumentUploadResponse(
+        id=document.id,
+        workspace_id=document.workspace_id,
+        filename=document.filename,
+        source_type=document.source_type,
+        revision=document.active_revision,
+        status=job.status,
+        job_id=job.id,
+        created_at=document.created_at,
+        updated_at=document.updated_at,
+    )
 
 
 @router.get("", response_model=list[DocumentResponse])

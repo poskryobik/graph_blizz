@@ -17,7 +17,8 @@ result = await service.query(authorized_workspace, "Что описано в д�
 
 ## Загрузка и чтение документа через Demo API
 
-Multipart upload сохраняет source и синхронно запускает индексирование. Физические
+Multipart upload сохраняет immutable source revision и атомарно создаёт durable
+indexing job. Ответ содержит `status=PENDING`, `revision` и `job_id`; физические
 ключи формируются сервером и не входят в запрос или ответ.
 
 ### Example
@@ -25,6 +26,8 @@ Multipart upload сохраняет source и синхронно запуска�
 ```bash
 curl -F 'file=@guide.md;type=text/markdown' \
   http://localhost:8000/v1/workspaces/12345678-1234-5678-1234-567812345678/documents
+
+# {"id":"...","revision":1,"status":"PENDING","job_id":"...",...}
 
 curl \
   http://localhost:8000/v1/workspaces/12345678-1234-5678-1234-567812345678/documents

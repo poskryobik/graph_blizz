@@ -15,11 +15,12 @@ from backend import create_app
 from backend.api.documents import (
     _safe_filename,
     get_document_repository,
-    get_indexing_service,
+    get_job_repository,
     get_source_service,
 )
 from backend.api.workspaces import get_workspace_repository
 from backend.documents import Document, DocumentStatus
+from backend.jobs import Job, JobStatus, JobType
 from backend.security import Permission
 from backend.workspaces import Workspace, WorkspaceStatus
 
@@ -49,6 +50,18 @@ UPLOADED = Document(
     updated_at=NOW,
 )
 READY = replace(UPLOADED, status=DocumentStatus.READY)
+JOB = Job(
+    id=UUID("bbbbbbbb-1234-5678-1234-567812345678"),
+    document_id=DOCUMENT_ID,
+    document_revision=1,
+    type=JobType.INDEX_DOCUMENT,
+    status=JobStatus.PENDING,
+    attempts=0,
+    max_attempts=3,
+    available_at=NOW,
+    created_at=NOW,
+    updated_at=NOW,
+)
 
 
 def _request(
@@ -63,13 +76,12 @@ def _request(
         "workspaces": AsyncMock(),
         "documents": AsyncMock(),
         "sources": AsyncMock(),
-        "indexing": AsyncMock(),
+        "jobs": AsyncMock(),
     }
     dependencies["workspaces"].get.return_value = WORKSPACE
     dependencies["documents"].list.return_value = [READY]
     dependencies["documents"].get.return_value = READY
-    dependencies["sources"].store.return_value = UPLOADED
-    dependencies["indexing"].index.return_value = READY
+    dependencies["sources"].store_for_indexing.return_value = (UPLOADED, JOB)
     if configure is not None:
         configure(dependencies)
 
@@ -82,13 +94,13 @@ def _request(
     async def source_service():  # type: ignore[no-untyped-def]
         return dependencies["sources"]
 
-    async def indexing_service():  # type: ignore[no-untyped-def]
-        return dependencies["indexing"]
+    async def job_repository():  # type: ignore[no-untyped-def]
+        return dependencies["jobs"]
 
     app.dependency_overrides[get_workspace_repository] = workspace_repository
     app.dependency_overrides[get_document_repository] = document_repository
     app.dependency_overrides[get_source_service] = source_service
-    app.dependency_overrides[get_indexing_service] = indexing_service
+    app.dependency_overrides[get_job_repository] = job_repository
 
     async def send() -> Response:
         async with AsyncClient(
@@ -99,7 +111,7 @@ def _request(
     return asyncio.run(send()), dependencies
 
 
-def test_upload_indexes_inline_and_hides_server_storage_fields() -> None:
+def test_upload_enqueues_and_hides_server_storage_fields() -> None:
     response, dependencies = _request(
         "POST",
         f"/v1/workspaces/{WORKSPACE_ID}/documents",
@@ -107,14 +119,15 @@ def test_upload_indexes_inline_and_hides_server_storage_fields() -> None:
     )
 
     assert response.status_code == 201
-    assert response.json()["status"] == "READY"
+    assert response.json()["status"] == "PENDING"
+    assert response.json()["job_id"] == str(JOB.id)
+    assert response.json()["revision"] == 1
     assert {"source_key", "object_uri", "content_hash"}.isdisjoint(response.json())
-    store_kwargs = dependencies["sources"].store.await_args.kwargs
+    store_kwargs = dependencies["sources"].store_for_indexing.await_args.kwargs
     assert store_kwargs["filename"] == "notes.md"
     assert store_kwargs["content"] == b"# Notes"
     assert store_kwargs["source_key"].startswith("upload-")
-    context = dependencies["indexing"].index.await_args.args[0]
-    assert context.workspace_id == WORKSPACE_ID
+    assert store_kwargs["jobs"] is dependencies["jobs"]
 
 
 def test_upload_rejects_paths_and_unsupported_types_before_storage() -> None:
@@ -131,8 +144,8 @@ def test_upload_rejects_paths_and_unsupported_types_before_storage() -> None:
 
     assert path_response.status_code == 422
     assert type_response.status_code == 415
-    path_dependencies["sources"].store.assert_not_awaited()
-    type_dependencies["sources"].store.assert_not_awaited()
+    path_dependencies["sources"].store_for_indexing.assert_not_awaited()
+    type_dependencies["sources"].store_for_indexing.assert_not_awaited()
 
 
 @pytest.mark.parametrize(
@@ -181,14 +194,13 @@ def test_missing_workspace_and_document_are_not_found() -> None:
     assert missing_document.status_code == 404
 
 
-def test_indexing_failure_returns_gateway_error_after_lifecycle_service_runs() -> None:
+def test_upload_does_not_invoke_inline_indexing_service() -> None:
     app = create_app()
     workspaces = AsyncMock()
     workspaces.get.return_value = WORKSPACE
     sources = AsyncMock()
-    sources.store.return_value = UPLOADED
-    indexing = AsyncMock()
-    indexing.index.side_effect = RuntimeError("private failure")
+    sources.store_for_indexing.return_value = (UPLOADED, JOB)
+    jobs = AsyncMock()
 
     async def workspace_repository():  # type: ignore[no-untyped-def]
         yield workspaces
@@ -199,13 +211,13 @@ def test_indexing_failure_returns_gateway_error_after_lifecycle_service_runs() -
     async def source_service():  # type: ignore[no-untyped-def]
         return sources
 
-    async def indexing_service():  # type: ignore[no-untyped-def]
-        return indexing
+    async def job_repository():  # type: ignore[no-untyped-def]
+        return jobs
 
     app.dependency_overrides[get_workspace_repository] = workspace_repository
     app.dependency_overrides[get_document_repository] = document_repository
     app.dependency_overrides[get_source_service] = source_service
-    app.dependency_overrides[get_indexing_service] = indexing_service
+    app.dependency_overrides[get_job_repository] = job_repository
 
     async def send() -> Response:
         async with AsyncClient(
@@ -217,9 +229,9 @@ def test_indexing_failure_returns_gateway_error_after_lifecycle_service_runs() -
             )
 
     response = asyncio.run(send())
-    assert response.status_code == 502
-    assert response.json() == {"detail": "document indexing failed"}
-    indexing.index.assert_awaited_once()
+    assert response.status_code == 201
+    assert response.json()["status"] == "PENDING"
+    sources.store_for_indexing.assert_awaited_once()
 
 
 def test_document_operations_request_document_permissions() -> None:

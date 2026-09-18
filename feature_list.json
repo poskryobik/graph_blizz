@@ -337,13 +337,13 @@
       "id": "F030",
       "title": "[MVP] Switch upload from inline indexing to durable jobs",
       "behavior": "Public upload path сохраняет immutable source revision и атомарно создаёт indexing job, затем возвращает PENDING/job_id. Inline path может остаться только dev option. Security semantics остаются demo_owner.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F027",
         "F029"
       ],
       "verification": "pytest -q tests/unit/api/test_documents_async.py tests/integration/test_document_upload_async.py",
-      "evidence": ""
+      "evidence": "Independent verification iteration 3 passed all F030 criteria after correcting stale inline-upload documentation. Public upload now stores the immutable source revision and exact durable PENDING indexing job before one PostgreSQL commit, returns revision/status/job_id without storage metadata, and no longer invokes IndexingService inline. Failure rolls back database writes and best-effort deletes the unreferenced source object; DemoOwner DOCUMENT_CREATE authorization remains unchanged. Focused tests passed (3), upload/jobs/worker regression passed (63 passed, 3 skipped), and the full pipeline passed Ruff, formatting, mypy, 289 unit tests and 20 integration tests (16 skipped, 1 deselected); e2e skipped because Docker/external services were unavailable. git diff --check passed."
     },
     {
       "id": "F031",

@@ -278,14 +278,13 @@ LightRAG Core
 - DemoOwner identity/access adapter;
 - workspace CRUD;
 - document upload/read;
-- inline indexing;
+- durable upload job creation с ответом `PENDING` и `job_id`;
 - Graph RAG query;
 - stable application errors;
 - request correlation и structured logging.
 
 ### MVP additions
 
-- async upload;
 - job status;
 - update/delete;
 - reindex;
@@ -585,7 +584,7 @@ Registry:
 
 ---
 
-## 20. Demo indexing flow
+## 20. Current upload indexing flow
 
 ```text
 POST /v1/workspaces/{id}/documents
@@ -597,16 +596,21 @@ DemoOwnerContext
 validate workspace/file
     │
     ▼
-create document metadata
+store original in MinIO under immutable object key
     │
     ▼
-store original in MinIO
+atomically persist document revision + durable PENDING job
     │
     ▼
-parse
+return document status = PENDING + job_id
+
+rag-worker
     │
     ▼
-document = INDEXING
+claim job for the immutable revision
+    │
+    ▼
+parse revision source
     │
     ▼
 IndexingService.index(...)
@@ -622,7 +626,9 @@ LightRAG insert
 document = READY
 ```
 
-Если indexing завершается ошибкой, document переходит в `FAILED`, а original source остаётся в MinIO.
+HTTP request не выполняет parsing или indexing. Если indexing в `rag-worker`
+завершается ошибкой, document и job переходят в `FAILED`, а immutable original
+source остаётся в MinIO.
 
 ---
 
@@ -1054,8 +1060,7 @@ Code parsing
     MVP: Tree-sitter
 
 Async processing
-    Demo: inline IndexingService
-    MVP: rag-worker + PostgreSQL jobs
+    Demo/MVP: rag-worker + PostgreSQL jobs
 
 Logging
     structured JSON

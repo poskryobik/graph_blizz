@@ -89,8 +89,9 @@ heartbeat должен быть короче lease. При SIGTERM/SIGINT worker
 claiming и завершает текущую job. После принудительной остановки истёкший lease
 восстановит job для следующего запуска. Document-level advisory lock не допускает
 пересечения внешних indexing mutations старого и нового execution, а переходы
-document state защищены owner, attempt и живым lease. Upload API пока сохраняет
-синхронный inline indexing; переключение upload на jobs не входит в F029.
+document state защищены owner, attempt и живым lease. Upload API сохраняет
+immutable revision, атомарно создаёт durable job и сразу возвращает
+`status=PENDING` с `job_id`; indexing выполняет `rag-worker`.
 
 ### GPU embeddings через vLLM
 
@@ -255,12 +256,13 @@ workspace-контекст через `DemoOwnerAccessPolicy`. Поле `storage
 В режиме `demo_owner` UTF-8 документы поддерживаемых Demo-форматов (`text/plain`
 и `text/markdown`, включая зарегистрированные текстовые расширения) загружаются
 multipart-запросом `POST /v1/workspaces/{workspace_id}/documents` в поле `file`.
-Размер source ограничен 10 MiB. Запрос синхронно сохраняет original source и
-выполняет inline indexing, поэтому успешный ответ `201` уже содержит статус
-`READY` и может выполняться долго. Ошибка indexing возвращает `502`, а сохранённая
-metadata переходит в `FAILED`; временная ошибка object storage возвращает `503`.
-Каждый новый source сохраняется под неизменяемым ключом с номером ревизии;
-логический `document_id` остаётся стабильным, а Demo API читает активную ревизию.
+Размер source ограничен 10 MiB. Запрос сохраняет original source и immutable
+ревизию, атомарно создаёт durable indexing job и сразу возвращает `201` со
+`status=PENDING`, номером `revision` и `job_id`. Индексирование выполняет
+`rag-worker`; временная ошибка object storage возвращает `503`. Если job не удалось
+создать, document и revision откатываются, а загруженный объект удаляется
+best-effort. Логический `document_id` остаётся стабильным, а Demo API читает
+активную ревизию.
 
 Список и отдельная metadata читаются через
 `GET /v1/workspaces/{workspace_id}/documents` и

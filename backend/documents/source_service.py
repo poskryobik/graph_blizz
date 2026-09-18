@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 
 from backend.documents.models import Document, DocumentRevision
 from backend.documents.repository import DocumentRepository
+from backend.jobs import Job, JobRepository
 from backend.storage import ObjectStorageError, ObjectStore
 
 
@@ -49,6 +50,49 @@ class DocumentSourceService:
             )
             await self._repository.commit()
             return document
+        except BaseException:
+            await self._rollback()
+            try:
+                self._object_store.delete(object_key)
+            except ObjectStorageError:
+                pass
+            raise
+
+    async def store_for_indexing(
+        self,
+        *,
+        jobs: JobRepository,
+        workspace_id: UUID,
+        source_key: str,
+        filename: str,
+        source_type: str,
+        content: bytes,
+    ) -> tuple[Document, Job]:
+        """Persist revision one and its pending indexing job in one transaction.
+
+        Source bytes are written first because object storage cannot participate in
+        the PostgreSQL transaction. Any later database failure rolls back document,
+        revision, and job together, then best-effort deletes the unreferenced object.
+        """
+        document_id = self._id_factory()
+        object_key = self.object_key(workspace_id, document_id, 1)
+        self._object_store.put(object_key, content)
+        try:
+            document = await self._repository.create(
+                document_id=document_id,
+                workspace_id=workspace_id,
+                source_key=source_key,
+                filename=filename,
+                source_type=source_type,
+                object_uri=self._object_store.uri(object_key),
+                content_hash=sha256(content).hexdigest(),
+            )
+            job = await jobs.create_indexing(
+                document_id=document.id,
+                document_revision=document.active_revision,
+            )
+            await self._repository.commit()
+            return document, job
         except BaseException:
             await self._rollback()
             try:

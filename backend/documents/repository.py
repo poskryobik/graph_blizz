@@ -22,6 +22,11 @@ class DocumentRepository:
         """Bind repository operations to a caller-owned database connection."""
         self._connection = connection
 
+    @property
+    def connection(self) -> AsyncConnection[Any]:
+        """Expose the caller-owned connection for one shared transaction."""
+        return self._connection
+
     async def commit(self) -> None:
         """Commit the current document transaction."""
         await self._connection.commit()

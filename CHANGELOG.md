@@ -14,12 +14,13 @@
 
 ### Added
 
+- Public document upload теперь атомарно сохраняет immutable revision и durable indexing job, возвращая `PENDING`, `revision` и `job_id` без inline indexing (F030).
 - Добавлен отдельный `rag-worker` с атомарным PostgreSQL claiming, lease/heartbeat, retry, recovery истёкших jobs и graceful shutdown (F029).
 - Добавлены durable indexing jobs с проверяемым lifecycle, lease/heartbeat, allow-listed кодами ошибок без traceback/секретов и запретом параллельных mutation jobs одного документа (F028).
 - Добавлены неизменяемые ревизии документов со стабильным `document_id`, последовательными номерами, revision-specific object keys и безопасной миграцией Demo-документов в ревизию 1 (F027).
 - Добавлены идемпотентная инициализация Demo через `scripts/init.sh` с проверкой API и model endpoints, обязательный regression gate `scripts/verify-demo.sh` и copy-paste сценарий API без авторизации.
 - Добавлен `POST /v1/workspaces/{id}/query` с Demo-owner авторизацией, Graph RAG ответом, уникальным `request_id` и минимальными workspace-scoped sources.
-- Добавлены Demo-owner upload/list/get endpoints документов с серверными storage-ключами и синхронным inline indexing до `READY` или `FAILED`.
+- Добавлены Demo-owner upload/list/get endpoints документов с серверными storage-ключами.
 - Добавлен независимый от HTTP inline `IndexingService`: он читает сохранённый source, выбирает parser и переводит документ через `INDEXING` в `READY` или `FAILED`.
 - Добавлен ленивый workspace-scoped реестр LightRAG runtime с namespace только из авторизованного контекста и graceful shutdown.
 - Добавлена pinned-зависимость LightRAG Core и production factory для PostgreSQL/Qdrant/Neo4j с общими внешними embedding и LLM клиентами.
