@@ -256,14 +256,14 @@
       "id": "F023",
       "title": "[DEMO] Expose document upload/read API",
       "behavior": "POST /v1/workspaces/{id}/documents работает в demo_owner mode без JWT: создаёт document metadata, сохраняет source и запускает inline IndexingService. GET list/get возвращают состояние. Для Demo допускается длительный HTTP request.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F009",
         "F012",
         "F022"
       ],
       "verification": "pytest -q tests/unit/api/test_documents_demo.py tests/integration/test_document_upload_demo.py",
-      "evidence": ""
+      "evidence": "Independent verification iteration 2 passed all F023 criteria. Focused F023/F022 lifecycle tests: 25 passed. Full scripts/verify.sh gate passed Ruff, format (81 files), mypy (38 files), and all configured unit/integration/e2e checks; git diff --check passed. POST persists server-generated metadata/source and runs inline indexing to READY, while failures durably preserve FAILED. GET list/item are workspace-scoped with safe 404 semantics. Filename validation rejects POSIX and Windows traversal/absolute forms, and metadata commit failures roll back and compensate object storage without masking the original error."
     },
     {
       "id": "F024",

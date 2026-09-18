@@ -20,6 +20,14 @@ class DocumentRepository:
         """Bind repository operations to a caller-owned database connection."""
         self._connection = connection
 
+    async def commit(self) -> None:
+        """Commit the current document transaction."""
+        await self._connection.commit()
+
+    async def rollback(self) -> None:
+        """Roll back the current document transaction."""
+        await self._connection.rollback()
+
     async def create(
         self,
         *,

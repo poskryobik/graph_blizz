@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 
 from backend.documents.models import Document
 from backend.documents.repository import DocumentRepository
-from backend.storage import ObjectStore
+from backend.storage import ObjectStorageError, ObjectStore
 
 
 class DocumentSourceService:
@@ -37,15 +37,32 @@ class DocumentSourceService:
         document_id = self._id_factory()
         object_key = self.object_key(workspace_id, document_id)
         self._object_store.put(object_key, content)
-        return await self._repository.create(
-            document_id=document_id,
-            workspace_id=workspace_id,
-            source_key=source_key,
-            filename=filename,
-            source_type=source_type,
-            object_uri=self._object_store.uri(object_key),
-            content_hash=sha256(content).hexdigest(),
-        )
+        try:
+            document = await self._repository.create(
+                document_id=document_id,
+                workspace_id=workspace_id,
+                source_key=source_key,
+                filename=filename,
+                source_type=source_type,
+                object_uri=self._object_store.uri(object_key),
+                content_hash=sha256(content).hexdigest(),
+            )
+            await self._repository.commit()
+            return document
+        except BaseException:
+            await self._rollback()
+            try:
+                self._object_store.delete(object_key)
+            except ObjectStorageError:
+                pass
+            raise
+
+    async def _rollback(self) -> None:
+        """Best-effort rollback after metadata persistence fails."""
+        try:
+            await self._repository.rollback()
+        except BaseException:  # noqa: BLE001 - preserve the persistence failure
+            return
 
     def read(self, document: Document) -> bytes:
         """Read the exact source bytes persisted for ``document``."""

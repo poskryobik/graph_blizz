@@ -1,5 +1,20 @@
 # Examples
 
+## Загрузка и чтение документа через Demo API
+
+Multipart upload сохраняет source и синхронно запускает индексирование. Физические
+ключи формируются сервером и не входят в запрос или ответ.
+
+### Example
+
+```bash
+curl -F 'file=@guide.md;type=text/markdown' \
+  http://localhost:8000/v1/workspaces/12345678-1234-5678-1234-567812345678/documents
+
+curl \
+  http://localhost:8000/v1/workspaces/12345678-1234-5678-1234-567812345678/documents
+```
+
 ## Индексация сохранённого документа
 
 `IndexingService` читает original source через storage boundary, выбирает parser

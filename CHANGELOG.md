@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Upload документов теперь сохраняет `FAILED` после ошибки indexing, компенсирует source при ошибке commit metadata и отклоняет Windows/UNC-пути в имени файла.
 - Инициализация LightRAG теперь безопасно сериализует временное storage environment между threads/event loops и закрывает частично созданные model-клиенты.
 - Одновременно живые LightRAG runtime сохраняют разные PostgreSQL workspace, а отменённая инициализация очищает частичные storages и model-клиенты.
 - Запуск unit-тестов описан через воспроизводимое `uv`-окружение без зависимости от глобального `pytest`.
@@ -11,6 +12,7 @@
 
 ### Added
 
+- Добавлены Demo-owner upload/list/get endpoints документов с серверными storage-ключами и синхронным inline indexing до `READY` или `FAILED`.
 - Добавлен независимый от HTTP inline `IndexingService`: он читает сохранённый source, выбирает parser и переводит документ через `INDEXING` в `READY` или `FAILED`.
 - Добавлен ленивый workspace-scoped реестр LightRAG runtime с namespace только из авторизованного контекста и graceful shutdown.
 - Добавлена pinned-зависимость LightRAG Core и production factory для PostgreSQL/Qdrant/Neo4j с общими внешними embedding и LLM клиентами.

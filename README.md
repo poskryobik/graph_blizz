@@ -191,6 +191,23 @@ endpoint работают без `Authorization` header и перед досту
 workspace-контекст через `DemoOwnerAccessPolicy`. Поле `storage_key` создаётся
 сервером, не принимается в запросе и не возвращается публичным API.
 
+## Document API
+
+В режиме `demo_owner` UTF-8 документы поддерживаемых Demo-форматов (`text/plain`
+и `text/markdown`, включая зарегистрированные текстовые расширения) загружаются
+multipart-запросом `POST /v1/workspaces/{workspace_id}/documents` в поле `file`.
+Размер source ограничен 10 MiB. Запрос синхронно сохраняет original source и
+выполняет inline indexing, поэтому успешный ответ `201` уже содержит статус
+`READY` и может выполняться долго. Ошибка indexing возвращает `502`, а сохранённая
+metadata переходит в `FAILED`; временная ошибка object storage возвращает `503`.
+
+Список и отдельная metadata читаются через
+`GET /v1/workspaces/{workspace_id}/documents` и
+`GET /v1/workspaces/{workspace_id}/documents/{document_id}`. Все операции проходят
+через `AuthorizedWorkspaceContext`, работают без JWT в `demo_owner` и возвращают
+`404` для отсутствующего workspace или документа в выбранном workspace. Клиент не
+может задавать или читать `storage_key`, `source_key`, object URI и content hash.
+
 ## Миграции PostgreSQL
 
 Application metadata хранится в отдельной схеме `graph_blizz`, которой управляет

@@ -53,6 +53,7 @@ def test_index_reads_parses_and_inserts_before_ready() -> None:
     rag.ainsert.assert_awaited_once_with("parsed content")
     runtimes.get.assert_awaited_once_with(_workspace())
     assert result.status is DocumentStatus.READY
+    assert repository.commit.await_count == 2
 
 
 @pytest.mark.parametrize("failure_at", ["read", "parse", "runtime", "insert"])
@@ -148,6 +149,7 @@ def test_cancellation_marks_failed_without_masking_or_leaking_cleanup() -> None:
             await asyncio.Future()
 
         repository.transition_status = AsyncMock(side_effect=transition_status)
+        repository.commit = AsyncMock()
         sources = MagicMock()
         sources.read.return_value = b"content"
         parser = MagicMock()
@@ -217,6 +219,7 @@ def _repository(events: list[str]) -> MagicMock:
         return replace(_document(), status=status)
 
     repository.transition_status = AsyncMock(side_effect=transition_status)
+    repository.commit = AsyncMock()
     return repository
 
 

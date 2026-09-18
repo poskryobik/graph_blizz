@@ -119,4 +119,5 @@ class IndexingService:
             raise DocumentStateTransitionError(
                 f"document {document.id} is not in {from_status.value} state"
             )
+        await self._repository.commit()
         return transitioned
