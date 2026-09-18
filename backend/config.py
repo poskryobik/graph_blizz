@@ -114,6 +114,7 @@ class Neo4jSettings(BaseModel):
 class LightRAGSettings(BaseModel):
     """LightRAG runtime storage and concurrency settings."""
 
+    working_dir: NonEmptyText = "/tmp/graph-blizz-lightrag"
     kv_storage: Literal["PGKVStorage"] = "PGKVStorage"
     document_status_storage: Literal["PGDocStatusStorage"] = "PGDocStatusStorage"
     vector_storage: Literal["QdrantVectorDBStorage"] = "QdrantVectorDBStorage"

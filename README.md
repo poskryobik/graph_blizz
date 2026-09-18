@@ -77,6 +77,26 @@ GRAPH_BLIZZ_RUN_GPU_TESTS=1 uv run --frozen pytest -q \
 проверяет `GRAPH_BLIZZ_EMBEDDING__DIMENSION` и не загружает embedding-модель в
 процесс `rag-api` или worker.
 
+LightRAG Core зафиксирован на версии `1.5.7`. Production factory
+`backend.rag.create_lightrag_runtime` подключает его internal KV/status storage к
+PostgreSQL, vector storage к Qdrant, graph storage к Neo4j, а model callbacks —
+к общим `EmbeddingClient` и `LLMClient`. Для создания runtime обязательны
+server-generated namespace из ASCII-букв, цифр и `_`, а также точная
+`GRAPH_BLIZZ_EMBEDDING__DIMENSION`; для стандартной Giga Embeddings модели Compose
+явно задаёт `1024`. Локальные runtime-файлы размещаются под
+`GRAPH_BLIZZ_LIGHTRAG__WORKING_DIR/<namespace>`. Runtime необходимо закрывать
+через `await runtime.close()` или `async with`; workspace registry создаётся
+отдельным следующим этапом. Фабрика владеет обоими model-клиентами с момента
+их создания и закрывает уже созданные ресурсы при любой последующей ошибке.
+Поскольку LightRAG 1.5.7 читает native storage settings из process environment,
+инициализация runtime сериализована в пределах процесса, включая разные event
+loops и threads; после инициализации исходное environment восстанавливается.
+PostgreSQL pool остаётся общим для процесса, но workspace хранится на каждом
+LightRAG storage, поэтому одновременно живые runtime изолированы, а закрытие
+одного не закрывает pool до освобождения последней ссылки. Отмена создания
+runtime пробрасывается вызывающему коду после ограниченной по времени очистки
+частично инициализированных storages и model-клиентов.
+
 Extraction и generation используют один async
 `backend.llm.LLMClient` и одну модель через OpenAI-compatible endpoint
 `POST <base_url>/chat/completions`. Endpoint, модель, API key и timeout задаются
@@ -212,3 +232,4 @@ responses никогда не логируются. Решение и его о�
 - [ADR 0008: Neo4j connectivity boundary](docs/architecture/decisions/0008-neo4j-connectivity-boundary.md)
 - [ADR 0009: единый клиент embeddings](docs/architecture/decisions/0009-shared-embedding-client.md)
 - [ADR 0010: единый OpenAI-compatible LLM-клиент](docs/architecture/decisions/0010-shared-openai-compatible-llm-client.md)
+- [ADR 0011: LightRAG Core как граница storage и model runtime](docs/architecture/decisions/0011-lightrag-storage-runtime-wiring.md)

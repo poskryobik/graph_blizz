@@ -4,11 +4,14 @@
 
 ### Fixed
 
+- Инициализация LightRAG теперь безопасно сериализует временное storage environment между threads/event loops и закрывает частично созданные model-клиенты.
+- Одновременно живые LightRAG runtime сохраняют разные PostgreSQL workspace, а отменённая инициализация очищает частичные storages и model-клиенты.
 - Запуск unit-тестов описан через воспроизводимое `uv`-окружение без зависимости от глобального `pytest`.
 - Operational logging переведён на строгую allow-list схему: произвольные payload и сообщения больше не могут вывести секреты, а разрешённые метрики не редактируются по совпадению имени.
 
 ### Added
 
+- Добавлена pinned-зависимость LightRAG Core и production factory для PostgreSQL/Qdrant/Neo4j с общими внешними embedding и LLM клиентами.
 - Локальная Ollama с `qwen3:1.7b` стала внешним LLM по умолчанию; Compose подключается к host endpoint с Linux-compatible alias и сохраняет переопределения для других провайдеров.
 - Добавлен единый async OpenAI-compatible LLM-клиент для extraction и generation с общей моделью, timeout и стабильными transport/HTTP/protocol ошибками.
 - Добавлен единый async-клиент OpenAI-compatible embeddings для API и будущего worker с timeout, стабильными ошибками и проверкой batch-индексов и размерности векторов.
