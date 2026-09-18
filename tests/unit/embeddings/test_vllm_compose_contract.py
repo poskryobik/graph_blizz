@@ -91,6 +91,27 @@ def test_rag_api_uses_host_ollama_defaults() -> None:
     assert rag_api["extra_hosts"] == ["host.docker.internal=host-gateway"]
 
 
+def test_rag_api_forwards_external_embedding_api_key() -> None:
+    environment = os.environ | {
+        "GRAPH_BLIZZ_EMBEDDING__API_KEY": "test-embedding-provider-key",
+    }
+    result = subprocess.run(
+        ["docker", "compose", "config", "--format", "json"],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+
+    assert (
+        json.loads(result.stdout)["services"]["rag-api"]["environment"][
+            "GRAPH_BLIZZ_EMBEDDING__API_KEY"
+        ]
+        == "test-embedding-provider-key"
+    )
+
+
 def test_rag_api_allows_external_llm_provider_overrides() -> None:
     environment = os.environ | {
         "GRAPH_BLIZZ_COMPOSE_EXTERNAL_LLM_BASE_URL": "https://llm.example/v1",

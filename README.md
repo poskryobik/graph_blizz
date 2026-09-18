@@ -12,8 +12,50 @@ uv run uvicorn backend.app:app --reload
 Для запуска текущего Demo-контура с PostgreSQL, MinIO, Qdrant и Neo4j:
 
 ```bash
-docker compose up -d --build --wait
+./scripts/init.sh
 ```
+
+Скрипт проверяет Docker/Compose, при отсутствии создаёт `.env` из
+`.env.example`, запускает сервисы, применяет Alembic migrations, создаёт bucket
+MinIO, проверяет API и выполняет пробные запросы к настроенным embedding и LLM
+endpoint. Только после успешных проверок он сообщает о готовности Demo. Его можно
+безопасно запускать повторно: данные в named volumes не удаляются.
+
+По умолчанию embedding endpoint указывает на opt-in GPU-сервис. Перед
+инициализацией запустите его командой
+`docker compose --profile gpu up -d vllm-embeddings` либо задайте доступный из
+`rag-api` OpenAI-compatible endpoint через
+`GRAPH_BLIZZ_COMPOSE_EMBEDDING_BASE_URL` (и при необходимости передайте
+`GRAPH_BLIZZ_EMBEDDING__API_KEY`). Аналогично, локальная Ollama должна быть
+доступна контейнеру по `GRAPH_BLIZZ_COMPOSE_EXTERNAL_LLM_BASE_URL`. Если
+любой model endpoint недоступен или возвращает несовместимый ответ, `init.sh`
+завершится с ошибкой и не объявит Demo готовым.
+
+После запуска полный сценарий без `Authorization` header можно повторить
+следующими командами:
+
+```bash
+workspace_id="$(curl --fail --silent --show-error \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Demo workspace","slug":"demo-workspace"}' \
+  http://localhost:8000/workspaces | uv run python -c \
+  'import json,sys; print(json.load(sys.stdin)["id"])')"
+
+printf 'The Aurora Finch observatory is located on Cedar Island.\n' > /tmp/aurora-finch.txt
+curl --fail --silent --show-error \
+  -F 'file=@/tmp/aurora-finch.txt;type=text/plain' \
+  "http://localhost:8000/v1/workspaces/${workspace_id}/documents"
+
+curl --fail --silent --show-error \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"Where is the Aurora Finch observatory located?"}' \
+  "http://localhost:8000/v1/workspaces/${workspace_id}/query"
+```
+
+Demo работает строго в owner-only режиме: все запросы выполняются от одного
+настроенного bootstrap owner без входа в систему. Это не multi-user security:
+нет изоляции пользователей, memberships, RBAC или ACL, поэтому режим нельзя
+использовать как production-аутентификацию.
 
 PostgreSQL и Neo4j остаются доступны только сервисам в изолированной
 internal-сети.
@@ -146,6 +188,7 @@ Ruff, mypy и pytest устанавливаются в проектное окр
 ./scripts/verify-unit.sh
 ./scripts/verify-integration.sh
 ./scripts/verify-e2e.sh
+./scripts/verify-demo.sh
 ./scripts/verify.sh
 ```
 
@@ -153,6 +196,9 @@ Ruff, mypy и pytest устанавливаются в проектное окр
 режиме. Общий pipeline выполняет обе проверки перед тестами. Каждый test runner
 выбирает только свой каталог и marker. При падении любой проверки её runner и
 общий pipeline завершаются с ненулевым кодом.
+`verify-demo.sh` последовательно запускает unit и integration regression suites,
+а затем обязательный полный Demo Graph RAG happy path; он также останавливается
+на первой ошибке и выводит название текущего этапа.
 
 ## Health API
 
