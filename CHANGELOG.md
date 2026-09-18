@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Исправлено восстановление indexing job после аварии между переводом документа в `READY` и записью успеха job (F029).
+- Устранена гонка recovery indexing job: старый execution больше не пересекается с новым и не может изменить его document state после потери lease (F029).
 - Upload документов теперь сохраняет `FAILED` после ошибки indexing, компенсирует source при ошибке commit metadata и отклоняет Windows/UNC-пути в имени файла.
 - Инициализация LightRAG теперь безопасно сериализует временное storage environment между threads/event loops и закрывает частично созданные model-клиенты.
 - Одновременно живые LightRAG runtime сохраняют разные PostgreSQL workspace, а отменённая инициализация очищает частичные storages и model-клиенты.
@@ -12,6 +14,7 @@
 
 ### Added
 
+- Добавлен отдельный `rag-worker` с атомарным PostgreSQL claiming, lease/heartbeat, retry, recovery истёкших jobs и graceful shutdown (F029).
 - Добавлены durable indexing jobs с проверяемым lifecycle, lease/heartbeat, allow-listed кодами ошибок без traceback/секретов и запретом параллельных mutation jobs одного документа (F028).
 - Добавлены неизменяемые ревизии документов со стабильным `document_id`, последовательными номерами, revision-specific object keys и безопасной миграцией Demo-документов в ревизию 1 (F027).
 - Добавлены идемпотентная инициализация Demo через `scripts/init.sh` с проверкой API и model endpoints, обязательный regression gate `scripts/verify-demo.sh` и copy-paste сценарий API без авторизации.

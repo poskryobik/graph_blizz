@@ -40,6 +40,44 @@ services:
       - backend
       - host_access
 
+  rag-worker:
+    build:
+      context: .
+    command: ["/app/.venv/bin/python", "-m", "backend.worker"]
+    stop_grace_period: 2m
+    depends_on:
+      minio: {condition: service_healthy}
+      neo4j: {condition: service_healthy}
+      postgres: {condition: service_healthy}
+      qdrant: {condition: service_healthy}
+    environment:
+      GRAPH_BLIZZ_ENVIRONMENT: development
+      GRAPH_BLIZZ_AUTH__MODE: ${GRAPH_BLIZZ_AUTH__MODE:-demo_owner}
+      GRAPH_BLIZZ_AUTH__DEMO_OWNER_ID: ${GRAPH_BLIZZ_AUTH__DEMO_OWNER_ID:-demo-owner}
+      GRAPH_BLIZZ_POSTGRES__HOST: postgres
+      GRAPH_BLIZZ_POSTGRES__DATABASE: graph_blizz
+      GRAPH_BLIZZ_POSTGRES__USERNAME: graph_blizz
+      GRAPH_BLIZZ_POSTGRES__PASSWORD: ${GRAPH_BLIZZ_POSTGRES__PASSWORD:-graph-blizz-demo-password}
+      GRAPH_BLIZZ_POSTGRES__SSL_MODE: disable
+      GRAPH_BLIZZ_MINIO__ENDPOINT_URL: http://minio:9000
+      GRAPH_BLIZZ_MINIO__ACCESS_KEY: ${GRAPH_BLIZZ_MINIO__ACCESS_KEY:-graph-blizz-demo}
+      GRAPH_BLIZZ_MINIO__SECRET_KEY: ${GRAPH_BLIZZ_MINIO__SECRET_KEY:-graph-blizz-demo-password}
+      GRAPH_BLIZZ_NEO4J__URI: bolt://neo4j:7687
+      GRAPH_BLIZZ_NEO4J__PASSWORD: ${GRAPH_BLIZZ_NEO4J__PASSWORD:-graph-blizz-demo-password}
+      GRAPH_BLIZZ_QDRANT__URL: http://qdrant:6333
+      GRAPH_BLIZZ_EMBEDDING__BASE_URL: ${GRAPH_BLIZZ_COMPOSE_EMBEDDING_BASE_URL:-http://vllm-embeddings:8000/v1}
+      GRAPH_BLIZZ_EMBEDDING__DIMENSION: ${GRAPH_BLIZZ_EMBEDDING__DIMENSION:-1024}
+      GRAPH_BLIZZ_EXTERNAL_LLM__BASE_URL: ${GRAPH_BLIZZ_COMPOSE_EXTERNAL_LLM_BASE_URL:-http://host.docker.internal:11434/v1}
+      GRAPH_BLIZZ_WORKER__POLL_SECONDS: ${GRAPH_BLIZZ_WORKER__POLL_SECONDS:-1}
+      GRAPH_BLIZZ_WORKER__LEASE_SECONDS: ${GRAPH_BLIZZ_WORKER__LEASE_SECONDS:-60}
+      GRAPH_BLIZZ_WORKER__HEARTBEAT_SECONDS: ${GRAPH_BLIZZ_WORKER__HEARTBEAT_SECONDS:-15}
+      GRAPH_BLIZZ_WORKER__RETRY_SECONDS: ${GRAPH_BLIZZ_WORKER__RETRY_SECONDS:-5}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - backend
+      - host_access
+
   minio:
     image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
     command: server /data --console-address ":9001"

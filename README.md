@@ -79,6 +79,19 @@ Host-порты можно переопределить через `GRAPH_BLIZZ_
 `.env`. Остановка без `--volumes` сохраняет данные, а
 `docker compose down --volumes` удаляет их.
 
+Compose запускает indexing worker отдельным сервисом `rag-worker`. Локально тот
+же процесс запускается командой `uv run python -m backend.worker`. Worker
+атомарно получает durable jobs из PostgreSQL, поддерживает lease heartbeat и
+повторяет сбои до `max_attempts`. Интервалы задаются через
+`GRAPH_BLIZZ_WORKER__POLL_SECONDS`, `GRAPH_BLIZZ_WORKER__LEASE_SECONDS`,
+`GRAPH_BLIZZ_WORKER__HEARTBEAT_SECONDS` и `GRAPH_BLIZZ_WORKER__RETRY_SECONDS`;
+heartbeat должен быть короче lease. При SIGTERM/SIGINT worker прекращает новый
+claiming и завершает текущую job. После принудительной остановки истёкший lease
+восстановит job для следующего запуска. Document-level advisory lock не допускает
+пересечения внешних indexing mutations старого и нового execution, а переходы
+document state защищены owner, attempt и живым lease. Upload API пока сохраняет
+синхронный inline indexing; переключение upload на jobs не входит в F029.
+
 ### GPU embeddings через vLLM
 
 GPU-сервис не входит в обычный `docker compose up`: он запускается только через
@@ -318,3 +331,4 @@ responses никогда не логируются. Решение и его о�
 - [ADR 0012: реестр LightRAG runtime по авторизованному workspace](docs/architecture/decisions/0012-workspace-runtime-registry.md)
 - [ADR 0013: Demo query service с workspace-scoped sources](docs/architecture/decisions/0013-demo-query-service.md)
 - [ADR 0014: неизменяемые ревизии документов](docs/architecture/decisions/0014-immutable-document-revisions.md)
+- [ADR 0016: leased PostgreSQL worker для indexing jobs](docs/architecture/decisions/0016-leased-rag-worker.md)

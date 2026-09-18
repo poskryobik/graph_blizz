@@ -325,13 +325,13 @@
       "id": "F029",
       "title": "[MVP] Implement PostgreSQL job claiming and rag-worker",
       "behavior": "Добавляется отдельный rag-worker process/container. Jobs claim через FOR UPDATE SKIP LOCKED или эквивалент. Worker вызывает существующий IndexingService, поддерживает heartbeat, graceful shutdown, retry и expired lease recovery.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F022",
         "F028"
       ],
       "verification": "pytest -q tests/unit/worker tests/integration/test_job_claiming.py tests/integration/test_worker_recovery.py",
-      "evidence": ""
+      "evidence": "Independent verification iteration 3 passed all F029 criteria after resolving READY-before-job-success replay, shutdown-during-recovery, and lease-loss processing races. The separate rag-worker atomically claims jobs with PostgreSQL FOR UPDATE SKIP LOCKED, maintains owner-fenced leases and heartbeats, invokes the existing IndexingService for the exact revision, retries safely, recovers expired work, and drains gracefully. A document-scoped PostgreSQL advisory lock serializes external mutation across attempts, while exact job/revision/owner/attempt/live-lease fences reject stale document transitions. The focused gate passed with 11 tests and 3 Docker-dependent skips; the full verification pipeline passed Ruff, formatting, mypy, 288 unit tests and 18 integration tests. Docker Compose validation and diff checks passed; live PostgreSQL tests skipped only because the Docker daemon is unavailable."
     },
     {
       "id": "F030",

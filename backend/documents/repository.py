@@ -162,6 +162,24 @@ class DocumentRepository:
         row = await cursor.fetchone()
         return None if row is None else self._document(row)
 
+    async def get_revision(
+        self, workspace_id: UUID, document_id: UUID, revision: int
+    ) -> Document | None:
+        """Return metadata projected onto one exact immutable revision."""
+        cursor = await self._connection.execute(
+            f"""
+            SELECT {self._COLUMNS}
+            FROM graph_blizz.documents AS d
+            JOIN graph_blizz.document_revisions AS r
+              ON r.document_id = d.id AND r.revision = %s
+            WHERE d.workspace_id = %s AND d.id = %s
+              AND d.active_revision = %s
+            """,
+            (revision, workspace_id, document_id, revision),
+        )
+        row = await cursor.fetchone()
+        return None if row is None else self._document(row)
+
     async def list(self, workspace_id: UUID) -> list[Document]:
         """Return workspace documents in deterministic creation order."""
         cursor = await self._connection.execute(
@@ -196,6 +214,47 @@ class DocumentRepository:
             RETURNING {self._COLUMNS}
             """,
             (to_status.value, workspace_id, document_id, from_status.value),
+        )
+        row = await cursor.fetchone()
+        return None if row is None else self._document(row)
+
+    async def transition_status_for_job(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+        from_status: DocumentStatus,
+        to_status: DocumentStatus,
+        job_id: UUID,
+        lease_owner: str,
+        attempt: int,
+    ) -> Document | None:
+        """Change status only while the exact processing attempt owns its lease."""
+        cursor = await self._connection.execute(
+            f"""
+            UPDATE graph_blizz.documents AS d
+            SET status = %s, updated_at = now()
+            FROM graph_blizz.document_revisions AS r
+            WHERE d.workspace_id = %s AND d.id = %s AND d.status = %s
+              AND r.document_id = d.id AND r.revision = d.active_revision
+              AND EXISTS (
+                  SELECT 1 FROM graph_blizz.jobs AS j
+                  WHERE j.id = %s AND j.document_id = d.id
+                    AND j.document_revision = d.active_revision
+                    AND j.status = 'RUNNING' AND j.lease_owner = %s
+                    AND j.attempts = %s AND j.lease_expires_at > now()
+              )
+            RETURNING {self._COLUMNS}
+            """,
+            (
+                to_status.value,
+                workspace_id,
+                document_id,
+                from_status.value,
+                job_id,
+                lease_owner,
+                attempt,
+            ),
         )
         row = await cursor.fetchone()
         return None if row is None else self._document(row)

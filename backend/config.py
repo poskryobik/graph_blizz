@@ -153,6 +153,22 @@ class LoggingSettings(BaseModel):
     service_name: NonEmptyText = "graph-blizz"
 
 
+class WorkerSettings(BaseModel):
+    """Polling, lease, heartbeat, and retry timing for the RAG worker."""
+
+    poll_seconds: PositiveSeconds = 1.0
+    lease_seconds: PositiveSeconds = 60.0
+    heartbeat_seconds: PositiveSeconds = 15.0
+    retry_seconds: Annotated[float, Field(ge=0)] = 5.0
+
+    @model_validator(mode="after")
+    def validate_heartbeat_interval(self) -> Self:
+        """Require enough time to renew a lease before it expires."""
+        if self.heartbeat_seconds >= self.lease_seconds:
+            raise ValueError("worker heartbeat_seconds must be less than lease_seconds")
+        return self
+
+
 class ApplicationSettings(BaseSettings):
     """Graph Blizz settings with ``GRAPH_BLIZZ_`` nested environment overrides."""
 
@@ -175,6 +191,7 @@ class ApplicationSettings(BaseSettings):
     embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
     external_llm: ExternalLLMSettings = Field(default_factory=ExternalLLMSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
+    worker: WorkerSettings = Field(default_factory=WorkerSettings)
 
     @model_validator(mode="after")
     def validate_production_configuration(self) -> Self:
