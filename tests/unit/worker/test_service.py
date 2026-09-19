@@ -96,7 +96,9 @@ def test_ready_revision_after_crash_is_replayed_as_success(
     )
     connection.execute.assert_awaited()
     indexing_service.assert_not_called()
-    store.succeed.assert_awaited_once_with(job_id=job.id, owner="worker-1")
+    store.succeed.assert_awaited_once_with(
+        job_id=job.id, owner="worker-1", attempt=job.attempts
+    )
     assert store.method_calls[:2] == [
         call.recover_expired(retry_after=timedelta(seconds=5)),
         call.claim_next(owner="worker-1", lease_for=timedelta(minutes=1)),

@@ -40,7 +40,7 @@ class Document:
     status: DocumentStatus
     created_at: datetime
     updated_at: datetime
-    active_revision: int = 1
+    active_revision: int | None
 
 
 @dataclass(frozen=True, slots=True)

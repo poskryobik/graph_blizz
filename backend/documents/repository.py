@@ -72,15 +72,21 @@ class DocumentRepository:
         source_type: str,
         object_uri: str,
         content_hash: str,
+        activate: bool = False,
     ) -> Document:
-        """Create a logical document and immutable revision 1 atomically."""
+        """Create a logical document and immutable revision 1 atomically.
+
+        ``activate`` is reserved for the legacy synchronous storage path. Durable
+        indexing creates keep revision 1 inactive until worker confirmation.
+        """
         cursor = await self._connection.execute(
             f"""
             WITH inserted_document AS (
                 INSERT INTO graph_blizz.documents (
-                    id, workspace_id, source_key, filename, source_type
+                    id, workspace_id, source_key, filename, source_type,
+                    active_revision
                 )
-                VALUES (COALESCE(%s, gen_random_uuid()), %s, %s, %s, %s)
+                VALUES (COALESCE(%s, gen_random_uuid()), %s, %s, %s, %s, %s)
                 RETURNING *
             ), inserted_revision AS (
                 INSERT INTO graph_blizz.document_revisions (
@@ -99,6 +105,7 @@ class DocumentRepository:
                 source_key,
                 filename,
                 source_type,
+                1 if activate else None,
                 object_uri,
                 content_hash,
             ),
@@ -186,7 +193,13 @@ class DocumentRepository:
             SELECT {self._COLUMNS}
             FROM graph_blizz.documents AS d
             JOIN graph_blizz.document_revisions AS r
-              ON r.document_id = d.id AND r.revision = d.active_revision
+              ON r.document_id = d.id
+             AND r.revision = COALESCE(
+                 d.active_revision,
+                 (SELECT MAX(candidate.revision)
+                  FROM graph_blizz.document_revisions AS candidate
+                  WHERE candidate.document_id = d.id)
+             )
             WHERE d.workspace_id = %s AND d.id = %s
             """,
             (workspace_id, document_id),
@@ -263,7 +276,13 @@ class DocumentRepository:
             SELECT {self._COLUMNS}
             FROM graph_blizz.documents AS d
             JOIN graph_blizz.document_revisions AS r
-              ON r.document_id = d.id AND r.revision = d.active_revision
+              ON r.document_id = d.id
+             AND r.revision = COALESCE(
+                 d.active_revision,
+                 (SELECT MAX(candidate.revision)
+                  FROM graph_blizz.document_revisions AS candidate
+                  WHERE candidate.document_id = d.id)
+             )
             WHERE d.workspace_id = %s
             ORDER BY d.created_at, d.id
             """,
@@ -343,13 +362,29 @@ class DocumentRepository:
         cursor = await self._connection.execute(
             f"""
             UPDATE graph_blizz.documents AS d
-            SET status = %s, updated_at = now()
+            SET status = %s,
+                active_revision = CASE WHEN %s = 'READY'
+                    THEN COALESCE(d.active_revision, r.revision)
+                    ELSE d.active_revision END,
+                updated_at = now()
             FROM graph_blizz.document_revisions AS r
             WHERE d.workspace_id = %s AND d.id = %s AND d.status = %s
-              AND r.document_id = d.id AND r.revision = d.active_revision
+              AND r.document_id = d.id
+              AND r.revision = COALESCE(
+                  d.active_revision,
+                  (SELECT MAX(candidate.revision)
+                   FROM graph_blizz.document_revisions AS candidate
+                   WHERE candidate.document_id = d.id)
+              )
             RETURNING {self._COLUMNS}
             """,
-            (to_status.value, workspace_id, document_id, from_status.value),
+            (
+                to_status.value,
+                to_status.value,
+                workspace_id,
+                document_id,
+                from_status.value,
+            ),
         )
         row = await cursor.fetchone()
         return None if row is None else self._document(row)
@@ -369,20 +404,22 @@ class DocumentRepository:
         cursor = await self._connection.execute(
             f"""
             UPDATE graph_blizz.documents AS d
-            SET status = %s, updated_at = now()
-            FROM graph_blizz.document_revisions AS r
+            SET status = %s,
+                active_revision = CASE WHEN %s = 'READY'
+                    THEN j.document_revision ELSE d.active_revision END,
+                updated_at = now()
+            FROM graph_blizz.jobs AS j
+            JOIN graph_blizz.document_revisions AS r
+              ON r.document_id = j.document_id
+             AND r.revision = j.document_revision
             WHERE d.workspace_id = %s AND d.id = %s AND d.status = %s
-              AND r.document_id = d.id AND r.revision = d.active_revision
-              AND EXISTS (
-                  SELECT 1 FROM graph_blizz.jobs AS j
-                  WHERE j.id = %s AND j.document_id = d.id
-                    AND j.document_revision = d.active_revision
-                    AND j.status = 'RUNNING' AND j.lease_owner = %s
-                    AND j.attempts = %s AND j.lease_expires_at > now()
-              )
+              AND j.id = %s AND j.document_id = d.id
+              AND j.status = 'RUNNING' AND j.lease_owner = %s
+              AND j.attempts = %s AND j.lease_expires_at > now()
             RETURNING {self._COLUMNS}
             """,
             (
+                to_status.value,
                 to_status.value,
                 workspace_id,
                 document_id,

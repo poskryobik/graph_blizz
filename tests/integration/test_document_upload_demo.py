@@ -48,6 +48,7 @@ def test_demo_owner_uploads_pending_document_without_credentials() -> None:
         status=DocumentStatus.UPLOADED,
         created_at=now,
         updated_at=now,
+        active_revision=None,
     )
     ready = replace(uploaded, status=DocumentStatus.READY)
     job = Job(

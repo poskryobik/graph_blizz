@@ -34,7 +34,9 @@ def test_successful_job_is_processed_and_completed_by_owner() -> None:
 
     assert worked is True
     processor.process.assert_awaited_once_with(job)
-    store.succeed.assert_awaited_once_with(job_id=job.id, owner="worker-1")
+    store.succeed.assert_awaited_once_with(
+        job_id=job.id, owner="worker-1", attempt=job.attempts
+    )
     store.fail.assert_not_awaited()
 
 
@@ -49,6 +51,7 @@ def test_failure_is_classified_without_persisting_exception_text() -> None:
     asyncio.run(_worker(store, processor).run_once())
 
     kwargs = store.fail.await_args.kwargs
+    assert kwargs["attempt"] == job.attempts
     assert kwargs["error_code"] is JobErrorCode.INDEXING_FAILED
     assert "secret" not in repr(kwargs)
     store.succeed.assert_not_awaited()

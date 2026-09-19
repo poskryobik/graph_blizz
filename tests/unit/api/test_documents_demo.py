@@ -54,6 +54,7 @@ UPLOADED = Document(
     status=DocumentStatus.UPLOADED,
     created_at=NOW,
     updated_at=NOW,
+    active_revision=1,
 )
 READY = replace(UPLOADED, status=DocumentStatus.READY)
 JOB = Job(

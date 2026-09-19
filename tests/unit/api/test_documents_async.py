@@ -47,6 +47,7 @@ def test_upload_returns_pending_job_without_inline_indexing() -> None:
         status=DocumentStatus.UPLOADED,
         created_at=NOW,
         updated_at=NOW,
+        active_revision=None,
     )
     job = Job(
         id=JOB_ID,

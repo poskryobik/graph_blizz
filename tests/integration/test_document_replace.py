@@ -206,8 +206,9 @@ async def _seed_running_replacement(
         )
         await connection.execute(
             "INSERT INTO graph_blizz.documents "
-            "(id, workspace_id, source_key, filename, source_type, status) "
-            "VALUES (%s, %s, %s, 'notes.md', 'text/markdown', 'UPDATING')",
+            "(id, workspace_id, source_key, filename, source_type, status, "
+            "active_revision) VALUES (%s, %s, %s, 'notes.md', "
+            "'text/markdown', 'UPDATING', 1)",
             (document_id, WORKSPACE_ID, slug),
         )
         await connection.execute(

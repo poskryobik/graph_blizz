@@ -66,20 +66,20 @@ class PostgreSQLJobStore:
             return job
 
     async def heartbeat(
-        self, *, job_id: UUID, owner: str, lease_for: timedelta
+        self, *, job_id: UUID, owner: str, attempt: int, lease_for: timedelta
     ) -> Job | None:
         async with await connect_postgres(self._settings) as connection:
             repository = JobRepository(connection)
             job = await repository.heartbeat(
-                job_id=job_id, owner=owner, lease_for=lease_for
+                job_id=job_id, owner=owner, attempt=attempt, lease_for=lease_for
             )
             await repository.commit()
             return job
 
-    async def succeed(self, *, job_id: UUID, owner: str) -> Job | None:
+    async def succeed(self, *, job_id: UUID, owner: str, attempt: int) -> Job | None:
         async with await connect_postgres(self._settings) as connection:
             repository = JobRepository(connection)
-            job = await repository.succeed(job_id=job_id, owner=owner)
+            job = await repository.succeed(job_id=job_id, owner=owner, attempt=attempt)
             await repository.commit()
             return job
 
@@ -88,6 +88,7 @@ class PostgreSQLJobStore:
         *,
         job_id: UUID,
         owner: str,
+        attempt: int,
         error_code: JobErrorCode,
         retry_after: timedelta,
     ) -> Job | None:
@@ -96,6 +97,7 @@ class PostgreSQLJobStore:
             job = await repository.fail(
                 job_id=job_id,
                 owner=owner,
+                attempt=attempt,
                 error_code=error_code,
                 retry_after=retry_after,
             )
@@ -164,7 +166,7 @@ class IndexingJobProcessor:
             ):
                 return
             active = await documents.get(workspace_id, job.document_id)
-            if active is None:
+            if active is None and document.active_revision is not None:
                 raise LookupError("job document is unavailable")
             if document.status in {DocumentStatus.FAILED, DocumentStatus.INDEXING}:
                 reset = await documents.transition_status(
@@ -205,7 +207,8 @@ class IndexingJobProcessor:
                 self._runtimes,
             )
             if (
-                document.status is DocumentStatus.UPDATING
+                active is not None
+                and document.status is DocumentStatus.UPDATING
                 and job.document_revision != active.active_revision
             ):
                 await self._replace(

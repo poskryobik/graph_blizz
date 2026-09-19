@@ -20,16 +20,19 @@ class JobStore(Protocol):
     async def claim_next(self, *, owner: str, lease_for: timedelta) -> Job | None: ...
 
     async def heartbeat(
-        self, *, job_id: UUID, owner: str, lease_for: timedelta
+        self, *, job_id: UUID, owner: str, attempt: int, lease_for: timedelta
     ) -> Job | None: ...
 
-    async def succeed(self, *, job_id: UUID, owner: str) -> Job | None: ...
+    async def succeed(
+        self, *, job_id: UUID, owner: str, attempt: int
+    ) -> Job | None: ...
 
     async def fail(
         self,
         *,
         job_id: UUID,
         owner: str,
+        attempt: int,
         error_code: JobErrorCode,
         retry_after: timedelta,
     ) -> Job | None: ...
@@ -116,11 +119,14 @@ class Worker:
             await self._store.fail(
                 job_id=job.id,
                 owner=self._owner,
+                attempt=job.attempts,
                 error_code=classify_error(error),
                 retry_after=self._retry_after,
             )
         else:
-            await self._store.succeed(job_id=job.id, owner=self._owner)
+            await self._store.succeed(
+                job_id=job.id, owner=self._owner, attempt=job.attempts
+            )
         finally:
             heartbeat.cancel()
             await asyncio.gather(heartbeat, return_exceptions=True)
@@ -130,7 +136,10 @@ class Worker:
         while True:
             await self._sleep(self._heartbeat_every)
             renewed = await self._store.heartbeat(
-                job_id=job.id, owner=self._owner, lease_for=self._lease_for
+                job_id=job.id,
+                owner=self._owner,
+                attempt=job.attempts,
+                lease_for=self._lease_for,
             )
             if renewed is None:
                 raise RuntimeError("job lease ownership was lost")

@@ -161,7 +161,7 @@ async def upload_document(
         workspace_id=document.workspace_id,
         filename=document.filename,
         source_type=document.source_type,
-        revision=document.active_revision,
+        revision=job.document_revision,
         status=job.status,
         job_id=job.id,
         created_at=document.created_at,
@@ -216,17 +216,18 @@ async def upsert_document(
     except ObjectStorageError as error:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE) from error
     document = result.document
+    revision = (
+        document.active_revision if result.job is None else result.job.document_revision
+    )
+    if revision is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT)
     return DocumentUploadResponse(
         action=result.action,
         id=document.id,
         workspace_id=document.workspace_id,
         filename=document.filename,
         source_type=document.source_type,
-        revision=(
-            document.active_revision
-            if result.job is None
-            else result.job.document_revision
-        ),
+        revision=revision,
         status=document.status if result.job is None else result.job.status,
         job_id=None if result.job is None else result.job.id,
         created_at=document.created_at,
@@ -275,6 +276,8 @@ async def delete_document(
     response.status_code = (
         status.HTTP_200_OK if result.job is None else status.HTTP_202_ACCEPTED
     )
+    if result.document.active_revision is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT)
     return DocumentDeleteResponse(
         id=result.document.id,
         workspace_id=result.document.workspace_id,

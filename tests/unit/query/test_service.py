@@ -104,4 +104,5 @@ def _document() -> Document:
         status=DocumentStatus.READY,
         created_at=now,
         updated_at=now,
+        active_revision=1,
     )

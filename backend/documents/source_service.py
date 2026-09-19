@@ -70,6 +70,7 @@ class DocumentSourceService:
                 source_type=source_type,
                 object_uri=self._object_store.uri(object_key),
                 content_hash=sha256(content).hexdigest(),
+                activate=True,
             )
             await self._repository.commit()
             return document
@@ -108,6 +109,8 @@ class DocumentSourceService:
                     raise RuntimeError("deleting document has no active deletion job")
                 await self._repository.commit()
                 return DocumentDeleteResult(document=document, job=job)
+            if document.active_revision is None:
+                raise RuntimeError("document has no active revision to delete")
             deleting = await self._repository.transition_status(
                 workspace_id=workspace_id,
                 document_id=document_id,
@@ -157,7 +160,7 @@ class DocumentSourceService:
             )
             job = await jobs.create_indexing(
                 document_id=document.id,
-                document_revision=document.active_revision,
+                document_revision=1,
             )
             await self._repository.commit()
             return document, job
@@ -248,7 +251,7 @@ class DocumentSourceService:
             )
             job = await jobs.create_indexing(
                 document_id=document.id,
-                document_revision=document.active_revision,
+                document_revision=1,
             )
             await self._repository.commit()
             return DocumentUpsertResult(

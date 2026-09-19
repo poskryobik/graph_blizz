@@ -382,14 +382,14 @@
       "id": "F034",
       "title": "[MVP] Preserve recoverable state on workflow failures",
       "behavior": "Ошибки parser, embedding, LLM, Qdrant, Neo4j или LightRAG не активируют неподтверждённую revision. Job получает RETRY/FAILED, а source и metadata сохраняются для безопасного повторного исполнения.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F029",
         "F032",
         "F033"
       ],
       "verification": "pytest -q tests/unit/workflows/test_failures.py tests/integration/test_indexing_failure_recovery.py",
-      "evidence": ""
+      "evidence": "Independent verification iteration 2 passed all F034 criteria. Durable CREATE retains immutable revision/source/job metadata with active_revision=NULL until the exact leased worker attempt successfully reaches READY; UPDATE failures preserve the prior active revision, and DELETE failures remain non-DELETED. Parser, embedding, LLM, Qdrant, Neo4j, and LightRAG-stage failures execute through the real indexing/worker path, transition the exact owner+attempt+live-lease job through bounded RETRY to FAILED, reject stale attempts, and retain recoverable metadata. The exact live Docker/PostgreSQL gate passed 9 tests; migration and F030-F033 regressions passed 24 tests; Ruff, formatting, mypy, git diff checks, 308 unit tests, and 42 integration tests passed. The remaining E2E failure was independently diagnosed as pre-existing Compose sequencing: rag-worker starts before Alembic creates graph_blizz.jobs and exits; no F034 change touches that startup path."
     },
     {
       "id": "F035",

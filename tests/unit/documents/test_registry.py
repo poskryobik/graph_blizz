@@ -67,6 +67,7 @@ def test_create_leaves_identity_status_and_timestamps_to_database() -> None:
         "source.pdf",
         "source.pdf",
         "application/pdf",
+        None,
         "s3://documents/workspace/source.pdf",
         "a" * 64,
     )
@@ -133,7 +134,13 @@ def test_transition_status_is_atomic_and_returns_updated_document() -> None:
 
     statement, parameters = connection.execute.await_args.args
     assert "d.workspace_id = %s AND d.id = %s AND d.status = %s" in statement
-    assert parameters == ("INDEXING", WORKSPACE_ID, DOCUMENT_ID, "UPLOADED")
+    assert parameters == (
+        "INDEXING",
+        "INDEXING",
+        WORKSPACE_ID,
+        DOCUMENT_ID,
+        "UPLOADED",
+    )
     assert document is not None
     assert document.status is DocumentStatus.INDEXING
 

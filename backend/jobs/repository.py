@@ -122,7 +122,7 @@ class JobRepository:
         return None if row is None else self._job(row)
 
     async def heartbeat(
-        self, *, job_id: UUID, owner: str, lease_for: timedelta
+        self, *, job_id: UUID, owner: str, attempt: int, lease_for: timedelta
     ) -> Job | None:
         """Extend an unexpired lease only when ``owner`` still owns the job."""
         self._validate_lease(owner, lease_for)
@@ -132,15 +132,16 @@ class JobRepository:
             SET heartbeat_at = now(), lease_expires_at = now() + %s,
                 updated_at = now()
             WHERE id = %s AND status = 'RUNNING' AND lease_owner = %s
+              AND attempts = %s
               AND lease_expires_at > now()
             RETURNING {self._COLUMNS}
             """,
-            (lease_for, job_id, owner),
+            (lease_for, job_id, owner, attempt),
         )
         row = await cursor.fetchone()
         return None if row is None else self._job(row)
 
-    async def succeed(self, *, job_id: UUID, owner: str) -> Job | None:
+    async def succeed(self, *, job_id: UUID, owner: str, attempt: int) -> Job | None:
         """Complete a running job when its owner still has a live lease."""
         cursor = await self._connection.execute(
             f"""
@@ -149,10 +150,11 @@ class JobRepository:
                 lease_expires_at = NULL, heartbeat_at = NULL,
                 finished_at = now(), updated_at = now()
             WHERE id = %s AND status = 'RUNNING' AND lease_owner = %s
+              AND attempts = %s
               AND lease_expires_at > now()
             RETURNING {self._COLUMNS}
             """,
-            (job_id, owner),
+            (job_id, owner, attempt),
         )
         row = await cursor.fetchone()
         return None if row is None else self._job(row)
@@ -162,6 +164,7 @@ class JobRepository:
         *,
         job_id: UUID,
         owner: str,
+        attempt: int,
         error_code: JobErrorCode,
         retry_after: timedelta,
     ) -> Job | None:
@@ -180,10 +183,11 @@ class JobRepository:
                     ELSE 'ATTEMPTS_EXHAUSTED' END,
                 error_detail = NULL, updated_at = now()
             WHERE id = %s AND status = 'RUNNING' AND lease_owner = %s
+              AND attempts = %s
               AND lease_expires_at > now()
             RETURNING {self._COLUMNS}
             """,
-            (retry_after, error_code.value, job_id, owner),
+            (retry_after, error_code.value, job_id, owner, attempt),
         )
         row = await cursor.fetchone()
         return None if row is None else self._job(row)

@@ -42,6 +42,7 @@ def test_demo_owner_queries_workspace_without_credentials_and_gets_sources() -> 
         status=DocumentStatus.READY,
         created_at=now,
         updated_at=now,
+        active_revision=1,
     )
     workspaces = AsyncMock()
     workspaces.get.return_value = workspace

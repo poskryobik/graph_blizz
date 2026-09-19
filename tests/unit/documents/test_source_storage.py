@@ -48,6 +48,7 @@ def test_store_persists_exact_bytes_before_metadata() -> None:
         "source_type": "application/pdf",
         "object_uri": f"s3://documents/{OBJECT_KEY}",
         "content_hash": "e93b782cffbdf7bb44c184d66794dadb7b8a25da6460d27cdbf37efb592132d2",
+        "activate": True,
     }
     assert document.status is DocumentStatus.UPLOADED
 
@@ -103,4 +104,5 @@ def _document(**values: object) -> Document:
         status=DocumentStatus.UPLOADED,
         created_at=now,
         updated_at=now,
+        active_revision=1,
     )

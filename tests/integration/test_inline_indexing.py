@@ -131,4 +131,5 @@ def _document(workspace_id: UUID, document_id: UUID) -> Document:
         status=DocumentStatus.UPLOADED,
         created_at=now,
         updated_at=now,
+        active_revision=1,
     )

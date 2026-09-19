@@ -28,6 +28,7 @@ def test_job_insert_failure_rolls_back_metadata_and_removes_source() -> None:
         status=DocumentStatus.UPLOADED,
         created_at=NOW,
         updated_at=NOW,
+        active_revision=None,
     )
     jobs = AsyncMock()
     jobs.create_indexing.side_effect = RuntimeError("job insert failed")

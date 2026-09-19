@@ -86,6 +86,14 @@ def test_demo_rows_migrate_to_immutable_revision_one(
         f"WHERE id = '{document_id}';",
     )
     assert "fk_documents_active_revision_document_revisions" in invalid_active
+    activation_column = _psql(
+        project,
+        environment,
+        "SELECT is_nullable || '|' || COALESCE(column_default, '') "
+        "FROM information_schema.columns WHERE table_schema = 'graph_blizz' "
+        "AND table_name = 'documents' AND column_name = 'active_revision';",
+    )
+    assert activation_column == "YES|"
 
 
 def _upgrade(project: str, environment: dict[str, str], target: str) -> None:

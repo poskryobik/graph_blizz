@@ -66,4 +66,5 @@ def _document(*, content_hash: str) -> Document:
         status=DocumentStatus.READY,
         created_at=NOW,
         updated_at=NOW,
+        active_revision=1,
     )

@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Сбои parser, model и LightRAG/storage операций теперь переводят только точную текущую попытку durable job в ограниченный retry или `FAILED`, сохраняя source и неподтверждённое состояние документа (F034).
 - Идентичный document upsert теперь возвращает `action=unchanged` без новой immutable revision, source-объекта или durable indexing job, включая конкурентные запросы (F031).
 - Исправлено восстановление indexing job после аварии между переводом документа в `READY` и записью успеха job (F029).
 - Устранена гонка recovery indexing job: старый execution больше не пересекается с новым и не может изменить его document state после потери lease (F029).

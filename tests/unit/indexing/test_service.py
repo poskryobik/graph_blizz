@@ -246,4 +246,5 @@ def _document() -> Document:
         status=DocumentStatus.UPLOADED,
         created_at=now,
         updated_at=now,
+        active_revision=1,
     )
