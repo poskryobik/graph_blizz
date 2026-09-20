@@ -343,6 +343,13 @@ responses никогда не логируются. Решение и его о�
 
 ## Архитектурные решения
 
+Parser registry использует Tree-sitter для `.py`, `.js`, `.jsx`, `.ts`, `.tsx`,
+`.java` и `.go` и эквивалентных MIME types. Валидный исходник помечается
+`syntax_status=parsed`; при syntax errors исходник детерминированно сохраняется
+одним chunk с `syntax_status=syntax_error_fallback`. Известные бинарные MIME types
+отклоняются до выбора по расширению. Грамматики поставляет runtime-зависимость
+`tree-sitter-language-pack`.
+
 - [ADR 0001: allow-list boundary для operational logging](docs/architecture/decisions/0001-safe-operational-logging-boundary.md)
 - [ADR 0002: PostgreSQL readiness в Docker Compose](docs/architecture/decisions/0002-postgresql-compose-readiness.md)
 - [ADR 0003: версионируемые миграции PostgreSQL через Alembic](docs/architecture/decisions/0003-versioned-postgresql-migrations.md)
@@ -360,3 +367,4 @@ responses никогда не логируются. Решение и его о�
 - [ADR 0016: leased PostgreSQL worker для indexing jobs](docs/architecture/decisions/0016-leased-rag-worker.md)
 - [ADR 0017: замена индексированного документа через lifecycle LightRAG](docs/architecture/decisions/0017-lightrag-document-replacement.md)
 - [ADR 0018: durable удаление документа через lifecycle LightRAG](docs/architecture/decisions/0018-durable-document-deletion.md)
+- [ADR 0019: Tree-sitter foundation для парсеров исходного кода](docs/architecture/decisions/0019-tree-sitter-parser-foundation.md)

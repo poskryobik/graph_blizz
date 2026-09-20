@@ -6,10 +6,39 @@ from pathlib import PurePath
 from backend.parsers.contracts import DocumentParser
 from backend.parsers.markdown import MarkdownParser
 from backend.parsers.text import PlainTextParser
+from backend.parsers.tree_sitter import TreeSitterParser
 
 
 class UnsupportedDocumentTypeError(ValueError):
     """Raised when no parser is registered for a document source."""
+
+
+class BinaryDocumentTypeError(UnsupportedDocumentTypeError):
+    """Raised when a binary media type must not fall back by extension."""
+
+
+_BINARY_MEDIA_TYPES = {
+    "application/gzip",
+    "application/msword",
+    "application/octet-stream",
+    "application/pdf",
+    "application/vnd.ms-excel",
+    "application/vnd.ms-powerpoint",
+    "application/x-bzip2",
+    "application/x-executable",
+    "application/x-tar",
+    "application/zip",
+    "application/x-7z-compressed",
+    "application/x-rar-compressed",
+}
+_BINARY_MEDIA_PREFIXES = (
+    "application/vnd.oasis.opendocument.",
+    "application/vnd.openxmlformats-officedocument.",
+    "audio/",
+    "font/",
+    "image/",
+    "video/",
+)
 
 
 class ParserRegistry:
@@ -38,9 +67,17 @@ class ParserRegistry:
     ) -> DocumentParser:
         """Return the first matching parser or reject the unsupported source."""
         if media_type is not None:
-            parser = self._media_types.get(self._normalize_media_type(media_type))
+            normalized_media_type = self._normalize_media_type(media_type)
+            parser = self._media_types.get(normalized_media_type)
             if parser is not None:
                 return parser
+            if (
+                normalized_media_type in _BINARY_MEDIA_TYPES
+                or normalized_media_type.startswith(_BINARY_MEDIA_PREFIXES)
+            ):
+                raise BinaryDocumentTypeError(
+                    f"binary document type is unsupported: media_type={media_type!r}"
+                )
         if filename is not None:
             parser = self._extensions.get(PurePath(filename).suffix.lower())
             if parser is not None:
@@ -65,21 +102,43 @@ def create_default_parser_registry() -> ParserRegistry:
     """Create the parser registry supported by the Demo application."""
     plain_text = PlainTextParser()
     markdown = MarkdownParser()
+    python = TreeSitterParser("python", "text/x-python")
+    javascript = TreeSitterParser("javascript", "text/javascript")
+    typescript = TreeSitterParser("typescript", "text/typescript")
+    tsx = TreeSitterParser("tsx", "text/tsx")
+    java = TreeSitterParser("java", "text/x-java-source")
+    go = TreeSitterParser("go", "text/x-go")
     return ParserRegistry(
         media_types={
             "text/plain": plain_text,
             "text/markdown": markdown,
+            "text/x-python": python,
+            "text/python": python,
+            "application/x-python-code": python,
+            "text/javascript": javascript,
+            "application/javascript": javascript,
+            "application/x-javascript": javascript,
+            "text/jsx": javascript,
+            "text/typescript": typescript,
+            "application/typescript": typescript,
+            "application/x-typescript": typescript,
+            "text/tsx": tsx,
+            "application/tsx": tsx,
+            "text/x-java-source": java,
+            "text/x-java": java,
+            "text/x-go": go,
+            "text/go": go,
         },
         extensions={
             ".txt": plain_text,
             ".md": markdown,
             ".markdown": markdown,
-            ".py": plain_text,
-            ".js": plain_text,
-            ".jsx": plain_text,
-            ".ts": plain_text,
-            ".tsx": plain_text,
-            ".java": plain_text,
-            ".go": plain_text,
+            ".py": python,
+            ".js": javascript,
+            ".jsx": javascript,
+            ".ts": typescript,
+            ".tsx": tsx,
+            ".java": java,
+            ".go": go,
         },
     )

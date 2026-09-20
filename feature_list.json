@@ -406,13 +406,13 @@
       "id": "F036",
       "title": "[MVP] Add Tree-sitter AST parsing foundation",
       "behavior": "Basic parser registry расширяется Tree-sitter adapters для фиксированного начального набора, например Python, JavaScript/TypeScript/TSX, Java и Go. Syntax errors имеют deterministic fallback; бинарные форматы отклоняются.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F014",
         "F026"
       ],
       "verification": "pytest -q tests/unit/parsers/test_tree_sitter.py tests/integration/test_ast_parsers.py",
-      "evidence": ""
+      "evidence": "Independent verification iteration 2 passed all F036 criteria. The registry selects Tree-sitter adapters for Python, JavaScript, TypeScript, TSX, Java, and Go while preserving MIME precedence; all six grammars execute through Tree-sitter. Malformed syntax produces a deterministic documented single-chunk fallback, and known binary MIME types are rejected before misleading code-extension fallback. The exact gate passed 8 tests, an 18-type binary MIME matrix was rejected, parser/indexing/upload regressions passed 58 tests, and the full pipeline passed Ruff, formatting, mypy, 318 unit tests, and 27 integration tests (23 skipped, 1 deselected); the E2E test was skipped because Docker was unavailable."
     },
     {
       "id": "F037",

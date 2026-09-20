@@ -1,8 +1,10 @@
 import pytest
 
 from backend.parsers import (
+    BinaryDocumentTypeError,
     MarkdownParser,
     PlainTextParser,
+    TreeSitterParser,
     UnsupportedDocumentTypeError,
     create_default_parser_registry,
 )
@@ -26,7 +28,6 @@ def test_registry_selects_markdown_parser_by_media_type() -> None:
 @pytest.mark.parametrize(
     "filename",
     [
-        "notes.txt",
         "module.py",
         "app.js",
         "view.jsx",
@@ -36,12 +37,12 @@ def test_registry_selects_markdown_parser_by_media_type() -> None:
         "main.go",
     ],
 )
-def test_registry_uses_plain_text_parser_for_demo_source_files(
+def test_registry_selects_tree_sitter_parser_for_source_files(
     filename: str,
 ) -> None:
     registry = create_default_parser_registry()
 
-    assert isinstance(registry.get_parser(filename=filename), PlainTextParser)
+    assert isinstance(registry.get_parser(filename=filename), TreeSitterParser)
 
 
 @pytest.mark.parametrize("filename", ["README.md", "GUIDE.MARKDOWN"])
@@ -49,6 +50,12 @@ def test_registry_selects_markdown_parser_by_extension(filename: str) -> None:
     registry = create_default_parser_registry()
 
     assert isinstance(registry.get_parser(filename=filename), MarkdownParser)
+
+
+def test_registry_keeps_plain_text_parser_for_txt_extension() -> None:
+    registry = create_default_parser_registry()
+
+    assert isinstance(registry.get_parser(filename="notes.txt"), PlainTextParser)
 
 
 def test_registry_prefers_supported_media_type_over_extension() -> None:
@@ -65,14 +72,39 @@ def test_registry_falls_back_to_extension_for_unknown_media_type() -> None:
 
     assert isinstance(
         registry.get_parser(
-            media_type="application/octet-stream", filename="README.md"
+            media_type="application/x-unknown-text", filename="README.md"
         ),
         MarkdownParser,
     )
+
+
+@pytest.mark.parametrize(
+    "media_type",
+    [
+        "application/octet-stream",
+        "application/pdf",
+        "application/gzip",
+        "application/x-tar",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/x-executable",
+        "image/png",
+        "audio/mpeg",
+    ],
+)
+def test_registry_rejects_binary_media_type_before_extension_fallback(
+    media_type: str,
+) -> None:
+    registry = create_default_parser_registry()
+
+    with pytest.raises(BinaryDocumentTypeError, match="binary document type"):
+        registry.get_parser(media_type=media_type, filename="misleading.py")
 
 
 def test_registry_rejects_unsupported_document_type() -> None:
     registry = create_default_parser_registry()
 
     with pytest.raises(UnsupportedDocumentTypeError, match="unsupported document type"):
-        registry.get_parser(media_type="application/pdf", filename="report.pdf")
+        registry.get_parser(
+            media_type="application/vnd.example.unsupported",
+            filename="report.docx",
+        )

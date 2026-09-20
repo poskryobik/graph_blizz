@@ -17,6 +17,7 @@
 
 ### Added
 
+- Parser registry теперь использует Tree-sitter для Python, JavaScript, TypeScript/TSX, Java и Go с детерминированным text fallback при syntax errors и явным отклонением бинарных MIME types (F036).
 - Public `DELETE` документа теперь создаёт durable deletion job; worker удаляет индекс через LightRAG и только после успеха атомарно фиксирует `DELETED`, сохраняя source revisions (F033).
 - Изменённый document `PUT` теперь создаёт immutable replacement revision и durable job; worker заменяет LightRAG-индекс и активирует revision только после полного успеха (F032).
 - Public document upload теперь атомарно сохраняет immutable revision и durable indexing job, возвращая `PENDING`, `revision` и `job_id` без inline indexing (F030).

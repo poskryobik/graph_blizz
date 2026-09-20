@@ -17,6 +17,7 @@ dependencies = [
     "python-multipart>=0.0.20,<1",
     "qdrant-client>=1.15,<2",
     "sqlalchemy>=2.0,<3",
+    "tree-sitter-language-pack>=0.13,<0.14",
     "uvicorn>=0.35,<1",
 ]
 
