@@ -8,6 +8,7 @@ from backend.documents import (
     DocumentSourceService,
     DocumentStatus,
 )
+from backend.indexing.provenance import insert_parsed_document
 from backend.parsers import ParserRegistry
 from backend.rag import LightRAGRuntimeRegistry
 from backend.security import AuthorizedWorkspaceContext
@@ -72,7 +73,7 @@ class IndexingService:
             )
             parsed = parser.parse(source, source_name=indexing.filename)
             runtime = await self._runtimes.get(workspace)
-            await runtime.rag.ainsert(parsed.content)
+            await insert_parsed_document(runtime.rag, indexing, parsed)
             return await self._transition(
                 indexing,
                 from_status=DocumentStatus.INDEXING,

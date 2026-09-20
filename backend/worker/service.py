@@ -5,7 +5,6 @@ from typing import Any
 from uuid import UUID
 
 import psycopg
-from lightrag.utils import compute_mdhash_id  # type: ignore[import-untyped]
 from psycopg import AsyncConnection
 
 from backend.config import ApplicationSettings, PostgreSQLSettings
@@ -16,8 +15,9 @@ from backend.documents import (
     DocumentStatus,
 )
 from backend.indexing import IndexingService
+from backend.indexing.provenance import delete_indexed_document, insert_parsed_document
 from backend.jobs import Job, JobErrorCode, JobRepository, JobType
-from backend.parsers import create_default_parser_registry
+from backend.parsers import ParsedDocument, create_default_parser_registry
 from backend.rag import LightRAGRuntimeRegistry
 from backend.security import (
     ALL_OWNER_PERMISSIONS,
@@ -236,10 +236,13 @@ class IndexingJobProcessor:
         old_content = self._parse(sources, active)
         new_content = self._parse(sources, replacement)
         runtime = await self._runtimes.get(context)
-        await runtime.rag.adelete_by_doc_id(
-            compute_mdhash_id(old_content, prefix="doc-")
+        await delete_indexed_document(runtime.rag, active, old_content)
+        await insert_parsed_document(
+            runtime.rag,
+            replacement,
+            new_content,
+            revision=job.document_revision,
         )
-        await runtime.rag.ainsert(new_content)
         completed = await documents.complete_replacement_for_job(
             workspace_id=context.workspace_id,
             document_id=replacement.id,
@@ -268,7 +271,7 @@ class IndexingJobProcessor:
             raise RuntimeError("deletion job revision is not active")
         content = self._parse(sources, document)
         runtime = await self._runtimes.get(context)
-        await runtime.rag.adelete_by_doc_id(compute_mdhash_id(content, prefix="doc-"))
+        await delete_indexed_document(runtime.rag, document, content)
         completed = await documents.complete_deletion_for_job(
             workspace_id=context.workspace_id,
             document_id=document.id,
@@ -281,13 +284,15 @@ class IndexingJobProcessor:
             raise RuntimeError("deletion job lease ownership was lost")
         await documents.commit()
 
-    def _parse(self, sources: DocumentSourceService, document: Document) -> str:
+    def _parse(
+        self, sources: DocumentSourceService, document: Document
+    ) -> ParsedDocument:
         source = sources.read(document).decode("utf-8")
         parser = self._parsers.get_parser(
             media_type=document.source_type,
             filename=document.filename,
         )
-        return parser.parse(source, source_name=document.filename).content
+        return parser.parse(source, source_name=document.filename)
 
     @staticmethod
     def _document_lock_key(document_id: UUID) -> int:

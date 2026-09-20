@@ -3,13 +3,17 @@
 import asyncio
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, call
 from uuid import UUID
 
 import pytest
 
 from backend.documents import Document, DocumentStatus
+from backend.indexing.provenance import decode_chunk_provenance
 from backend.jobs import Job, JobStatus, JobType
+from backend.parsers import TreeSitterParser
+from backend.security import AuthorizedWorkspaceContext, PrincipalType
 from backend.worker import service as worker_service
 from backend.worker.runner import Worker
 from backend.worker.service import IndexingJobProcessor
@@ -103,6 +107,77 @@ def test_ready_revision_after_crash_is_replayed_as_success(
         call.recover_expired(retry_after=timedelta(seconds=5)),
         call.claim_next(owner="worker-1", lease_for=timedelta(minutes=1)),
     ]
+
+
+def test_replacement_code_chunks_use_job_target_revision() -> None:
+    job = replace(_running_job(), document_revision=2)
+    active = _document(active_revision=1, status=DocumentStatus.UPDATING)
+    replacement = replace(
+        active,
+        object_uri="s3://bucket/revision/2",
+        content_hash="b" * 64,
+    )
+    documents = MagicMock()
+    documents.complete_replacement_for_job = AsyncMock(return_value=replacement)
+    documents.commit = AsyncMock()
+    sources = MagicMock()
+    sources.read.side_effect = [
+        b"def old():\n    return 1\n",
+        b"def new():\n    return 2\n",
+    ]
+    rag = SimpleNamespace(adelete_by_doc_id=AsyncMock(), ainsert=AsyncMock())
+    processor = object.__new__(IndexingJobProcessor)
+    processor._parsers = MagicMock()
+    processor._parsers.get_parser.return_value = TreeSitterParser(
+        "python", "text/x-python"
+    )
+    processor._runtimes = MagicMock()
+    processor._runtimes.get = AsyncMock(return_value=SimpleNamespace(rag=rag))
+
+    asyncio.run(
+        processor._replace(
+            documents=documents,
+            sources=sources,
+            context=_workspace(),
+            active=active,
+            replacement=replacement,
+            job=job,
+        )
+    )
+
+    assert all(
+        "-r2-" in document_id for document_id in rag.ainsert.await_args.kwargs["ids"]
+    )
+    citations = rag.ainsert.await_args.kwargs["file_paths"]
+    decoded = [decode_chunk_provenance(value) for value in citations]
+    assert all(value is not None and value["revision"] == 2 for value in decoded)
+
+
+def _workspace() -> AuthorizedWorkspaceContext:
+    return AuthorizedWorkspaceContext(
+        principal_id="owner",
+        principal_type=PrincipalType.USER,
+        workspace_id=UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
+        storage_key="ws_test",
+        permissions=frozenset(),
+    )
+
+
+def _document(*, active_revision: int, status: DocumentStatus) -> Document:
+    document_id = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+    return Document(
+        id=document_id,
+        workspace_id=document_id,
+        source_key="source.py",
+        filename="source.py",
+        source_type="text/x-python",
+        object_uri="s3://bucket/revision/1",
+        content_hash="a" * 64,
+        status=status,
+        created_at=NOW,
+        updated_at=NOW,
+        active_revision=active_revision,
+    )
 
 
 def _running_job() -> Job:

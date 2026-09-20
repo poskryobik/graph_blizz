@@ -29,10 +29,16 @@ class QueryRequest(BaseModel):
 
 
 class QuerySourceResponse(BaseModel):
-    """Minimal public identity of an indexed document source."""
+    """Public document identity and optional retrieved code location."""
 
     document_id: UUID
     filename: str
+    revision: int | None = None
+    path: str | None = None
+    language: str | None = None
+    symbol: str | None = None
+    start_line: int | None = None
+    end_line: int | None = None
 
 
 class QueryResponse(BaseModel):
@@ -55,7 +61,7 @@ async def get_query_service(
     )
 
 
-@router.post("", response_model=QueryResponse)
+@router.post("", response_model=QueryResponse, response_model_exclude_none=True)
 async def query_workspace(
     workspace_id: UUID,
     payload: QueryRequest,

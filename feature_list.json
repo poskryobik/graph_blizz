@@ -429,13 +429,13 @@
       "id": "F038",
       "title": "[MVP] Preserve rich source provenance through retrieval",
       "behavior": "Query response для source code возвращает document_id, revision, path, language, symbol и line ranges, когда они доступны. Metadata проходит parser -> indexing -> retrieval без потери document identity.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F032",
         "F037"
       ],
       "verification": "pytest -q tests/unit/query/test_sources.py tests/integration/test_query_source_traceability.py",
-      "evidence": ""
+      "evidence": "Independent verification iteration 2 passed all F038 criteria. Source-code parser metadata is encoded into deterministic LightRAG chunk documents and returned as document_id, revision, path, language, symbol, start_line, and end_line when available. Query validates citations against workspace-scoped READY documents at the active revision while preserving legacy and non-code behavior. Replacement indexing uses the target job revision and is covered with actual Tree-sitter chunks. Exact gate: 2 passed; focused regressions: 23 passed, 4 infrastructure-dependent skipped; full verification: Ruff, formatting, mypy, 330 unit tests, and 28 integration tests passed; infrastructure-only E2E was skipped."
     },
     {
       "id": "F039",

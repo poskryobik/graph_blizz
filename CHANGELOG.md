@@ -17,6 +17,7 @@
 
 ### Added
 
+- Query sources для source code теперь содержат document/revision identity, путь, язык, символ и диапазон строк из фактически retrieved parser chunks (F038).
 - Tree-sitter parsers теперь делят валидный Python, JavaScript, TypeScript/TSX, Java и Go по границам модулей, классов и функций/методов, сохраняя путь, иерархию символов и диапазоны строк; крупные символы детерминированно ограничиваются числом токенов (F037).
 - Parser registry теперь использует Tree-sitter для Python, JavaScript, TypeScript/TSX, Java и Go с детерминированным text fallback при syntax errors и явным отклонением бинарных MIME types (F036).
 - Public `DELETE` документа теперь создаёт durable deletion job; worker удаляет индекс через LightRAG и только после успеха атомарно фиксирует `DELETED`, сохраняя source revisions (F033).
