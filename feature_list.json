@@ -418,12 +418,12 @@
       "id": "F037",
       "title": "[MVP] Produce semantic code chunks",
       "behavior": "Source code делится по module/class/function/method boundaries; слишком крупные symbols дополнительно режутся по token limit. Каждый chunk сохраняет path, language, symbol, symbol_type, parent_symbol и start/end line.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F036"
       ],
       "verification": "pytest -q tests/unit/parsers/test_code_chunking.py",
-      "evidence": ""
+      "evidence": "Independent verification iteration 2 passed all F037 criteria. Semantic AST chunking is deterministic for Python, JavaScript, TypeScript/TSX, Java, and Go; oversized regions respect the explicit token limit; required path/language/symbol hierarchy and inclusive line metadata are preserved as strings; ordered chunks reconstruct Unicode source losslessly; and the F036 syntax-error fallback remains compatible. Exact gate: 10 passed; focused integration: 6 passed; full verification: Ruff, formatting, mypy, 328 unit tests, and 27 integration tests passed. Infrastructure-only Docker/GPU scenarios were skipped by the standard gates."
     },
     {
       "id": "F038",

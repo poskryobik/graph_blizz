@@ -1,6 +1,6 @@
 import pytest
 
-from backend.parsers import ParsedChunk, TreeSitterParser
+from backend.parsers import TreeSitterParser
 
 pytestmark = pytest.mark.unit
 
@@ -13,17 +13,15 @@ def test_tree_sitter_parser_marks_valid_source_as_parsed() -> None:
     )
 
     assert parsed.content == content
-    assert parsed.chunks == (
-        ParsedChunk(
-            content=content,
-            index=0,
-            metadata={
-                "parser": "tree_sitter",
-                "language": "python",
-                "syntax_status": "parsed",
-            },
-        ),
-    )
+    assert "".join(chunk.content for chunk in parsed.chunks) == content
+    function = next(chunk for chunk in parsed.chunks if chunk.metadata["symbol"])
+    assert function.content == "def answer() -> int:\n    return 42"
+    assert function.metadata["path"] == "answer.py"
+    assert function.metadata["symbol"] == "answer"
+    assert function.metadata["symbol_type"] == "function"
+    assert function.metadata["parent_symbol"] == ""
+    assert function.metadata["start_line"] == "1"
+    assert function.metadata["end_line"] == "2"
     assert parsed.metadata == {
         "parser": "tree_sitter",
         "content_type": "text/x-python",

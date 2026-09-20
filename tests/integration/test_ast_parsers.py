@@ -33,4 +33,4 @@ def test_registry_parses_supported_source_with_tree_sitter(
     assert parsed.content == content
     assert parsed.metadata["syntax_status"] == "parsed"
     assert parsed.metadata["language"] == language
-    assert parsed.chunks[0].content == content
+    assert "".join(chunk.content for chunk in parsed.chunks) == content
