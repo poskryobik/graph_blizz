@@ -395,12 +395,12 @@
       "id": "F035",
       "title": "[MVP] Recover in-flight workflows after restart",
       "behavior": "После restart rag-api/rag-worker/PostgreSQL expired RUNNING jobs могут быть продолжены без duplicate revision, duplicate logical document или параллельной mutation.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F034"
       ],
       "verification": "pytest -q tests/integration/test_workflow_restart_recovery.py",
-      "evidence": ""
+      "evidence": "Independent verification iteration 3 passed all F035 criteria. The exact live gate stopped and restarted PostgreSQL, recovered the same expired RUNNING job, preserved the original job/document/revision identities with one row each, allowed exactly one of two replacement workers to execute, and rejected stale owner/attempt completion. Compose now restarts rag-worker unless explicitly stopped. Test-only Compose teardown uses a short down timeout while production retains its two-minute graceful-stop period. The exact gate passed 2 tests; the full verification pipeline passed Ruff, formatting, mypy, 308 unit tests, 44 integration tests (1 deselected), and 1 E2E test with no leaked verification projects or port conflicts."
     },
     {
       "id": "F036",

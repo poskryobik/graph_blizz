@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- `rag-worker` теперь автоматически перезапускается после сбоя или рестарта PostgreSQL и продолжает expired `RUNNING` job с прежними document/job/revision identity (F035).
 - Сбои parser, model и LightRAG/storage операций теперь переводят только точную текущую попытку durable job в ограниченный retry или `FAILED`, сохраняя source и неподтверждённое состояние документа (F034).
 - Идентичный document upsert теперь возвращает `action=unchanged` без новой immutable revision, source-объекта или durable indexing job, включая конкурентные запросы (F031).
 - Исправлено восстановление indexing job после аварии между переводом документа в `READY` и записью успеха job (F029).

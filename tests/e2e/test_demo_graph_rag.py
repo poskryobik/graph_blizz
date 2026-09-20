@@ -188,6 +188,8 @@ def demo_api(model_server: int) -> Iterator[str]:
             project,
             environment,
             "down",
+            "--timeout",
+            "5",
             "--volumes",
             "--remove-orphans",
             check=False,

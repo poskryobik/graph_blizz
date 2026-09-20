@@ -59,6 +59,8 @@ def compose_project() -> Iterator[tuple[str, dict[str, str]]]:
             project,
             environment,
             "down",
+            "--timeout",
+            "5",
             "--volumes",
             "--remove-orphans",
             check=False,

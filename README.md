@@ -92,6 +92,10 @@ claiming и завершает текущую job. После принудите
 document state защищены owner, attempt и живым lease. Upload API сохраняет
 immutable revision, атомарно создаёт durable job и сразу возвращает
 `status=PENDING` с `job_id`; indexing выполняет `rag-worker`.
+Compose перезапускает аварийно завершившийся `rag-worker`: после восстановления
+PostgreSQL worker атомарно переводит expired `RUNNING` job в `RETRY` и повторно
+claim-ит ту же job для той же immutable revision. Новый logical document или
+revision при recovery не создаётся.
 `PUT` с изменённым содержимым создаёт следующую immutable revision и переводит
 документ в `UPDATING`, но сохраняет прежнюю revision активной до полного успеха
 replacement job. Worker удаляет старую индексированную версию через lifecycle

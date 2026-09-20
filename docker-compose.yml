@@ -44,6 +44,7 @@ services:
     build:
       context: .
     command: ["/app/.venv/bin/python", "-m", "backend.worker"]
+    restart: unless-stopped
     stop_grace_period: 2m
     depends_on:
       minio: {condition: service_healthy}
