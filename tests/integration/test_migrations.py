@@ -8,9 +8,12 @@ from pathlib import Path
 
 import pytest
 
+from backend.config import EmbeddingSettings
+from backend.index_versions import embedding_profile_identity
+
 pytestmark = pytest.mark.integration
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-REVISION = "20260918_0008"
+REVISION = "20260921_0009"
 
 
 @pytest.fixture(scope="module")
@@ -101,8 +104,47 @@ def test_fresh_and_repeated_upgrade_reach_head(
     assert _schema_snapshot(project, environment) == first_snapshot
 
 
+def test_index_contract_backfill_and_downgrade_round_trip(
+    compose_project: tuple[str, dict[str, str]],
+) -> None:
+    """Preserve the exact Demo profile while 0009 is applied and removed."""
+    project, environment = compose_project
+    _alembic(project, environment, "downgrade", "20260918_0008")
+    _psql(
+        project,
+        environment,
+        "INSERT INTO graph_blizz.workspaces (name, slug) "
+        "VALUES ('Demo', 'migration-backfill');",
+    )
+
+    _upgrade(project, environment)
+    profile = _psql(
+        project,
+        environment,
+        "SELECT embedding_profile FROM graph_blizz.workspaces "
+        "WHERE slug = 'migration-backfill';",
+    )
+    assert profile == embedding_profile_identity(EmbeddingSettings())
+
+    _alembic(project, environment, "downgrade", "20260918_0008")
+    columns = _psql(
+        project,
+        environment,
+        "SELECT count(*) FROM information_schema.columns "
+        "WHERE table_schema = 'graph_blizz' AND table_name = 'workspaces' "
+        "AND column_name IN ('index_schema_version', 'embedding_profile');",
+    )
+    assert columns == "0"
+    _upgrade(project, environment)
+
+
 def _upgrade(project: str, environment: dict[str, str]) -> None:
     """Run the bundled Alembic CLI inside the application container."""
+    _alembic(project, environment, "upgrade", "head")
+
+
+def _alembic(project: str, environment: dict[str, str], *arguments: str) -> None:
+    """Run one Alembic command inside the application container."""
     _compose(
         project,
         environment,
@@ -110,8 +152,7 @@ def _upgrade(project: str, environment: dict[str, str]) -> None:
         "-T",
         "rag-api",
         "/app/.venv/bin/alembic",
-        "upgrade",
-        "head",
+        *arguments,
         timeout=60,
     )
 

@@ -446,6 +446,9 @@ document_revisions
     created_at
 ```
 
+Правила совместимости физического индекса зафиксированы в
+[ADR 0020](decisions/0020-versioned-index-namespaces.md).
+
 `document_id` остаётся стабильным между версиями.
 
 Одинаковый SHA-256 при upsert означает idempotent NOOP.

@@ -5,6 +5,7 @@ from collections.abc import Awaitable, Callable
 from uuid import UUID
 
 from backend.config import ApplicationSettings
+from backend.index_versions import IndexContract
 from backend.rag.factory import LightRAGRuntime, create_lightrag_runtime
 from backend.security import AuthorizedWorkspaceContext
 
@@ -28,7 +29,7 @@ class LightRAGRuntimeRegistry:
         """
         self._settings = settings
         self._runtime_factory = runtime_factory
-        self._runtimes: dict[UUID, LightRAGRuntime] = {}
+        self._runtimes: dict[tuple[UUID, int, str | None], LightRAGRuntime] = {}
         self._lock = asyncio.Lock()
         self._closing = False
         self._close_task: asyncio.Task[None] | None = None
@@ -54,13 +55,24 @@ class LightRAGRuntimeRegistry:
             if self._closing:
                 raise RuntimeError("LightRAG runtime registry is closed")
 
-            runtime = self._runtimes.get(workspace.workspace_id)
+            cache_key = (
+                workspace.workspace_id,
+                workspace.index_schema_version,
+                workspace.embedding_profile,
+            )
+            runtime = self._runtimes.get(cache_key)
             if runtime is None:
+                storage_key = workspace.storage_key
+                if workspace.embedding_profile is not None:
+                    contract = IndexContract(
+                        workspace.index_schema_version, workspace.embedding_profile
+                    )
+                    storage_key = f"{storage_key}_{contract.namespace_suffix}"
                 runtime = await self._runtime_factory(
                     self._settings,
-                    workspace=workspace.storage_key,
+                    workspace=storage_key,
                 )
-                self._runtimes[workspace.workspace_id] = runtime
+                self._runtimes[cache_key] = runtime
             return runtime
 
     async def close(self) -> None:

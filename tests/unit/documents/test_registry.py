@@ -29,6 +29,10 @@ def _row() -> tuple[object, ...]:
         CREATED_AT,
         CREATED_AT,
         1,
+        1,
+        1,
+        1,
+        False,
     )
 
 
@@ -70,6 +74,9 @@ def test_create_leaves_identity_status_and_timestamps_to_database() -> None:
         None,
         "s3://documents/workspace/source.pdf",
         "a" * 64,
+        1,
+        1,
+        1,
     )
     assert document.status is DocumentStatus.UPLOADED
 

@@ -55,4 +55,6 @@ class DemoOwnerAccessPolicy:
             workspace_id=workspace.id,
             storage_key=workspace.storage_key,
             permissions=ALL_OWNER_PERMISSIONS,
+            index_schema_version=workspace.index_schema_version,
+            embedding_profile=workspace.embedding_profile,
         )

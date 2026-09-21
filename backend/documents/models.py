@@ -41,6 +41,10 @@ class Document:
     created_at: datetime
     updated_at: datetime
     active_revision: int | None
+    parser_version: int = 1
+    chunk_schema_version: int = 1
+    index_schema_version: int = 1
+    requires_reindex: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,3 +56,7 @@ class DocumentRevision:
     object_uri: str
     content_hash: str
     created_at: datetime
+    parser_version: int = 1
+    chunk_schema_version: int = 1
+    index_schema_version: int = 1
+    requires_reindex: bool = False

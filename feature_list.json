@@ -453,13 +453,13 @@
       "id": "F040",
       "title": "[MVP] Add parser and index schema versioning",
       "behavior": "Workspace хранит index_schema_version и embedding profile identity; revisions фиксируют parser/chunk/index versions. Несовместимое изменение помечает данные requiring reindex вместо смешивания несовместимых индексов.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F027",
         "F037"
       ],
       "verification": "pytest -q tests/unit/indexing/test_schema_version.py tests/integration/test_index_versioning.py",
-      "evidence": ""
+      "evidence": "Independent verification iteration 4 passed all F040 criteria with no blocker or major issues. Workspaces persist index schema and canonical embedding-profile identity; revisions persist actual parser/chunk/index versions; contract changes serialize on the workspace row, atomically mark active non-deleted revisions for reindex, and select schema/profile-isolated LightRAG runtimes. Migration 0009 safely backfills Demo rows and renders correct offline upgrade/downgrade SQL. Exact gate passed with 4 tests and 3 Docker-only skips; focused checks passed with 19 tests and 5 Docker-only skips; full verification passed Ruff, format, mypy, 331 unit tests and 30 integration tests; 2 Docker-dependent E2E tests skipped."
     },
     {
       "id": "F041",

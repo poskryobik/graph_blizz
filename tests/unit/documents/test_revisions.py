@@ -7,6 +7,7 @@ from uuid import UUID
 
 import pytest
 
+from backend import index_versions
 from backend.documents import (
     Document,
     DocumentRepository,
@@ -22,7 +23,12 @@ WORKSPACE_ID = UUID("12345678-1234-5678-1234-567812345678")
 CREATED_AT = datetime(2026, 9, 18, tzinfo=UTC)
 
 
-def test_repository_locks_document_and_allocates_next_revision() -> None:
+def test_repository_locks_document_and_allocates_next_revision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(index_versions, "PARSER_VERSION", 7)
+    monkeypatch.setattr(index_versions, "CHUNK_SCHEMA_VERSION", 8)
+    monkeypatch.setattr(index_versions, "INDEX_SCHEMA_VERSION", 9)
     lock_cursor = AsyncMock()
     lock_cursor.fetchone.return_value = (DOCUMENT_ID,)
     sequence_cursor = AsyncMock()
@@ -34,6 +40,10 @@ def test_repository_locks_document_and_allocates_next_revision() -> None:
         "s3://documents/revision/3/source",
         "c" * 64,
         CREATED_AT,
+        7,
+        8,
+        9,
+        False,
     )
     connection = AsyncMock()
     connection.execute.side_effect = [lock_cursor, sequence_cursor, insert_cursor]
@@ -60,7 +70,13 @@ def test_repository_locks_document_and_allocates_next_revision() -> None:
         3,
         "s3://documents/revision/3/source",
         "c" * 64,
+        7,
+        8,
+        9,
     )
+    assert result.parser_version == 7
+    assert result.chunk_schema_version == 8
+    assert result.index_schema_version == 9
 
 
 def test_source_service_stores_revision_under_immutable_numbered_key() -> None:

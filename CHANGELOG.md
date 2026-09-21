@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Добавлено версионирование parser/chunk/index schema и embedding-профиля с явной пометкой данных, требующих reindex.
+
 ### Fixed
 
 - `rag-worker` теперь автоматически перезапускается после сбоя или рестарта PostgreSQL и продолжает expired `RUNNING` job с прежними document/job/revision identity (F035).

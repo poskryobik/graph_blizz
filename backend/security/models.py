@@ -48,3 +48,5 @@ class AuthorizedWorkspaceContext:
     workspace_id: UUID
     storage_key: str
     permissions: frozenset[Permission]
+    index_schema_version: int = 1
+    embedding_profile: str | None = None

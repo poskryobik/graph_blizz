@@ -6,6 +6,7 @@ from uuid import UUID
 
 from psycopg import AsyncConnection
 
+from backend import index_versions
 from backend.documents.models import Document, DocumentRevision, DocumentStatus
 
 
@@ -19,7 +20,8 @@ class DocumentRepository:
     _COLUMNS = (
         "d.id, d.workspace_id, d.source_key, d.filename, d.source_type, "
         "r.object_uri, r.content_hash, d.status, d.created_at, d.updated_at, "
-        "d.active_revision"
+        "d.active_revision, r.parser_version, r.chunk_schema_version, "
+        "r.index_schema_version, r.requires_reindex"
     )
 
     def __init__(self, connection: AsyncConnection[Any]) -> None:
@@ -90,9 +92,10 @@ class DocumentRepository:
                 RETURNING *
             ), inserted_revision AS (
                 INSERT INTO graph_blizz.document_revisions (
-                    document_id, revision, object_uri, content_hash
+                    document_id, revision, object_uri, content_hash,
+                    parser_version, chunk_schema_version, index_schema_version
                 )
-                SELECT id, 1, %s, %s FROM inserted_document
+                SELECT id, 1, %s, %s, %s, %s, %s FROM inserted_document
                 RETURNING *
             )
             SELECT {self._COLUMNS}
@@ -108,6 +111,9 @@ class DocumentRepository:
                 1 if activate else None,
                 object_uri,
                 content_hash,
+                index_versions.PARSER_VERSION,
+                index_versions.CHUNK_SCHEMA_VERSION,
+                index_versions.INDEX_SCHEMA_VERSION,
             ),
         )
         return self._document(await cursor.fetchone())
@@ -153,12 +159,23 @@ class DocumentRepository:
         inserted = await self._connection.execute(
             """
             INSERT INTO graph_blizz.document_revisions (
-                document_id, revision, object_uri, content_hash
+                document_id, revision, object_uri, content_hash,
+                parser_version, chunk_schema_version, index_schema_version
             )
-            VALUES (%s, %s, %s, %s)
-            RETURNING document_id, revision, object_uri, content_hash, created_at
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING document_id, revision, object_uri, content_hash, created_at,
+                      parser_version, chunk_schema_version, index_schema_version,
+                      requires_reindex
             """,
-            (document_id, revision, object_uri, content_hash),
+            (
+                document_id,
+                revision,
+                object_uri,
+                content_hash,
+                index_versions.PARSER_VERSION,
+                index_versions.CHUNK_SCHEMA_VERSION,
+                index_versions.INDEX_SCHEMA_VERSION,
+            ),
         )
         return self._revision(await inserted.fetchone())
 
@@ -449,6 +466,10 @@ class DocumentRepository:
             created_at=row[8],
             updated_at=row[9],
             active_revision=row[10],
+            parser_version=row[11] if len(row) > 11 else 1,
+            chunk_schema_version=row[12] if len(row) > 12 else 1,
+            index_schema_version=row[13] if len(row) > 13 else 1,
+            requires_reindex=row[14] if len(row) > 14 else False,
         )
 
     @staticmethod
@@ -462,4 +483,8 @@ class DocumentRepository:
             object_uri=row[2],
             content_hash=row[3],
             created_at=row[4],
+            parser_version=row[5] if len(row) > 5 else 1,
+            chunk_schema_version=row[6] if len(row) > 6 else 1,
+            index_schema_version=row[7] if len(row) > 7 else 1,
+            requires_reindex=row[8] if len(row) > 8 else False,
         )

@@ -85,6 +85,53 @@ def test_concurrent_get_creates_one_runtime_for_workspace() -> None:
     asyncio.run(scenario())
 
 
+def test_contract_change_rotates_runtime_namespace() -> None:
+    async def scenario() -> None:
+        settings = cast(ApplicationSettings, object())
+        runtimes = [_runtime(), _runtime(), _runtime()]
+        factory = AsyncMock(side_effect=runtimes)
+        registry = LightRAGRuntimeRegistry(settings, runtime_factory=factory)
+        base = _context()
+        first_contract = AuthorizedWorkspaceContext(
+            principal_id=base.principal_id,
+            principal_type=base.principal_type,
+            workspace_id=base.workspace_id,
+            storage_key=base.storage_key,
+            permissions=base.permissions,
+            index_schema_version=1,
+            embedding_profile='{"model":"embedding-v1"}',
+        )
+        schema_change = AuthorizedWorkspaceContext(
+            principal_id=base.principal_id,
+            principal_type=base.principal_type,
+            workspace_id=base.workspace_id,
+            storage_key=base.storage_key,
+            permissions=base.permissions,
+            index_schema_version=2,
+            embedding_profile=first_contract.embedding_profile,
+        )
+        profile_change = AuthorizedWorkspaceContext(
+            principal_id=base.principal_id,
+            principal_type=base.principal_type,
+            workspace_id=base.workspace_id,
+            storage_key=base.storage_key,
+            permissions=base.permissions,
+            index_schema_version=2,
+            embedding_profile='{"model":"embedding-v2"}',
+        )
+
+        assert await registry.get(first_contract) is runtimes[0]
+        assert await registry.get(first_contract) is runtimes[0]
+        assert await registry.get(schema_change) is runtimes[1]
+        assert await registry.get(profile_change) is runtimes[2]
+
+        namespaces = [call.kwargs["workspace"] for call in factory.await_args_list]
+        assert len(namespaces) == len(set(namespaces)) == 3
+        await registry.close()
+
+    asyncio.run(scenario())
+
+
 def test_failed_and_cancelled_initialization_can_be_retried() -> None:
     async def scenario() -> None:
         runtime = _runtime()

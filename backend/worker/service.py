@@ -14,6 +14,7 @@ from backend.documents import (
     DocumentSourceService,
     DocumentStatus,
 )
+from backend.index_versions import active_index_contract
 from backend.indexing import IndexingService
 from backend.indexing.provenance import delete_indexed_document, insert_parsed_document
 from backend.jobs import Job, JobErrorCode, JobRepository, JobType
@@ -180,7 +181,13 @@ class IndexingJobProcessor:
                 await documents.commit()
                 document = reset
 
-            workspace = await WorkspaceRepository(connection).get(workspace_id)
+            workspace_repository = WorkspaceRepository(connection)
+            contract = active_index_contract(self._settings.embedding)
+            workspace = await workspace_repository.ensure_index_contract(
+                workspace_id,
+                index_schema_version=contract.index_schema_version,
+                embedding_profile=contract.embedding_profile,
+            )
             if workspace is None or workspace.status is not WorkspaceStatus.ACTIVE:
                 raise LookupError("job workspace is unavailable")
             context = AuthorizedWorkspaceContext(
@@ -189,6 +196,8 @@ class IndexingJobProcessor:
                 workspace_id=workspace.id,
                 storage_key=workspace.storage_key,
                 permissions=ALL_OWNER_PERMISSIONS,
+                index_schema_version=workspace.index_schema_version,
+                embedding_profile=workspace.embedding_profile,
             )
             sources = DocumentSourceService(documents, self._object_store)
             if job.type is JobType.DELETE_DOCUMENT:
