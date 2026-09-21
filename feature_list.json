@@ -477,7 +477,7 @@
       "id": "F042",
       "title": "[MVP] Verify full single-owner lifecycle and persistence",
       "behavior": "Full-stack E2E выполняет create, READY, unchanged upsert, changed revision, query v2, delete, restart stack и повторную проверку persisted source-of-truth state. Security остаётся demo_owner и не участвует в критерии успешности.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F033",
         "F035",
@@ -485,7 +485,7 @@
         "F041"
       ],
       "verification": "pytest -q tests/e2e/test_mvp_lifecycle.py tests/e2e/test_full_stack_restart.py",
-      "evidence": ""
+      "evidence": "Independent verification iteration 2 passed every F042 criterion and resolved F042-V1/V2/V3. The live Compose gate passed 2 tests: public create-to-READY, unchanged upsert, revision-2 update, v2-only query, delete, full service restart, and persisted PostgreSQL/MinIO/API/query state. The harness uses isolated projects, ephemeral ports with post-restart re-resolution, deterministic model services, bounded readiness barriers, and infrastructure-only skips. Ruff, formatting, mypy, 336 unit tests, git diff checks, and the required live gate passed; unrelated pre-existing integration fixture, migration-head, uniqueness, and external registry failures remain outside F042."
     },
     {
       "id": "F043",
