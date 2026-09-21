@@ -465,13 +465,13 @@
       "id": "F041",
       "title": "[MVP] Implement durable workspace reindex",
       "behavior": "Maintenance operation создаёт durable jobs и перестраивает derived indexes из PostgreSQL metadata и MinIO revisions. Reindex переживает restart и не требует повторной загрузки originals.",
-      "state": "not started",
+      "state": "pass",
       "depends_on": [
         "F035",
         "F040"
       ],
       "verification": "pytest -q tests/unit/maintenance/test_reindex.py tests/e2e/test_workspace_reindex.py",
-      "evidence": ""
+      "evidence": "Independent verification iteration 2 passed all F041 criteria with no issues. The maintenance operation reconciles the active index contract and enqueues durable reindex jobs in one transaction; workers recover PostgreSQL revision metadata and persisted MinIO originals, survive retry/restart through durable leases, and atomically mark jobs successful, update provenance, and clear requires_reindex only after indexing. Failures preserve recoverable state. Required gate: 5 passed, 1 Docker-only skip; full verification passed Ruff, formatting, mypy, 336 unit tests and 30 integration tests; git diff, compileall, and single-head Alembic history checks passed."
     },
     {
       "id": "F042",

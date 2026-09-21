@@ -78,6 +78,42 @@ class JobRepository:
         )
         return self._job(await cursor.fetchone())
 
+    async def create_workspace_reindex(self, workspace_id: UUID) -> list[Job]:
+        """Create durable jobs for marked active revisions without duplicates.
+
+        The caller owns the transaction. Repeated maintenance requests skip a
+        revision while any active mutation job already protects its document.
+        Terminal failures remain eligible for a later explicit retry request.
+        """
+        await self._connection.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+            (f"workspace-reindex:{workspace_id}",),
+        )
+        cursor = await self._connection.execute(
+            f"""
+            INSERT INTO graph_blizz.jobs (
+                document_id, document_revision, job_type
+            )
+            SELECT d.id, d.active_revision, %s
+            FROM graph_blizz.documents AS d
+            JOIN graph_blizz.document_revisions AS r
+              ON r.document_id = d.id AND r.revision = d.active_revision
+            JOIN graph_blizz.workspaces AS w
+              ON w.id = d.workspace_id AND w.status = 'ACTIVE'
+            WHERE d.workspace_id = %s AND d.status = 'READY'
+              AND r.requires_reindex
+              AND NOT EXISTS (
+                  SELECT 1 FROM graph_blizz.jobs AS active
+                  WHERE active.document_id = d.id
+                    AND active.status IN ('PENDING', 'RUNNING', 'RETRY')
+              )
+            ORDER BY d.created_at, d.id
+            RETURNING {self._COLUMNS}
+            """,
+            (JobType.REINDEX_DOCUMENT.value, workspace_id),
+        )
+        return [self._job(row) for row in await cursor.fetchall()]
+
     async def get_active_for_document(self, document_id: UUID) -> Job | None:
         """Return the single active mutation job for a document, if any."""
         cursor = await self._connection.execute(

@@ -266,6 +266,14 @@ endpoint работают без `Authorization` header и перед досту
 workspace-контекст через `DemoOwnerAccessPolicy`. Поле `storage_key` создаётся
 сервером, не принимается в запросе и не возвращается публичным API.
 
+`POST /workspaces/{workspace_id}/maintenance/reindex` с permission
+`index.rebuild` в одной транзакции сверяет workspace с текущим index contract,
+помечает несовместимые активные revisions и создаёт для них durable
+`REINDEX_DOCUMENT` jobs. Повторный запрос не дублирует активную
+job. Worker читает metadata из PostgreSQL и original по сохранённому MinIO URI,
+перестраивает текущий versioned namespace и только после успеха снимает отметку;
+lease recovery продолжает незавершённую работу после рестарта без нового upload.
+
 ## Document API
 
 В режиме `demo_owner` UTF-8 документы поддерживаемых Demo-форматов (`text/plain`
@@ -364,7 +372,10 @@ Parser registry использует Tree-sitter для `.py`, `.js`, `.jsx`, `.
 - [ADR 0012: реестр LightRAG runtime по авторизованному workspace](docs/architecture/decisions/0012-workspace-runtime-registry.md)
 - [ADR 0013: Demo query service с workspace-scoped sources](docs/architecture/decisions/0013-demo-query-service.md)
 - [ADR 0014: неизменяемые ревизии документов](docs/architecture/decisions/0014-immutable-document-revisions.md)
+- [ADR 0015: durable indexing jobs](docs/architecture/decisions/0015-durable-indexing-jobs.md)
 - [ADR 0016: leased PostgreSQL worker для indexing jobs](docs/architecture/decisions/0016-leased-rag-worker.md)
 - [ADR 0017: замена индексированного документа через lifecycle LightRAG](docs/architecture/decisions/0017-lightrag-document-replacement.md)
 - [ADR 0018: durable удаление документа через lifecycle LightRAG](docs/architecture/decisions/0018-durable-document-deletion.md)
 - [ADR 0019: Tree-sitter foundation для парсеров исходного кода](docs/architecture/decisions/0019-tree-sitter-parser-foundation.md)
+- [ADR 0020: versioned index namespaces](docs/architecture/decisions/0020-versioned-index-namespaces.md)
+- [ADR 0021: durable workspace reindex через document jobs](docs/architecture/decisions/0021-durable-workspace-reindex.md)

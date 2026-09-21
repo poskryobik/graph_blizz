@@ -7,6 +7,7 @@ from uuid import UUID
 import psycopg
 from psycopg import AsyncConnection
 
+from backend import index_versions
 from backend.config import ApplicationSettings, PostgreSQLSettings
 from backend.documents import (
     Document,
@@ -200,6 +201,15 @@ class IndexingJobProcessor:
                 embedding_profile=workspace.embedding_profile,
             )
             sources = DocumentSourceService(documents, self._object_store)
+            if job.type is JobType.REINDEX_DOCUMENT:
+                await self._reindex(
+                    documents=documents,
+                    sources=sources,
+                    context=context,
+                    document=document,
+                    job=job,
+                )
+                return
             if job.type is JobType.DELETE_DOCUMENT:
                 await self._delete(
                     documents=documents,
@@ -230,6 +240,40 @@ class IndexingJobProcessor:
                 )
                 return
             await service.index(context, document)
+
+    async def _reindex(
+        self,
+        *,
+        documents: LeasedDocumentRepository,
+        sources: DocumentSourceService,
+        context: AuthorizedWorkspaceContext,
+        document: Document,
+        job: Job,
+    ) -> None:
+        """Rebuild one active revision from its stored original source."""
+        if document.status is not DocumentStatus.READY:
+            raise RuntimeError("reindex document is not ready")
+        if document.active_revision != job.document_revision:
+            raise RuntimeError("reindex job revision is not active")
+        parsed = self._parse(sources, document)
+        runtime = await self._runtimes.get(context)
+        await insert_parsed_document(
+            runtime.rag, document, parsed, revision=job.document_revision
+        )
+        completed = await documents.complete_reindex_for_job(
+            workspace_id=context.workspace_id,
+            document_id=document.id,
+            revision=job.document_revision,
+            job_id=job.id,
+            lease_owner=job.lease_owner or "",
+            attempt=job.attempts,
+            parser_version=index_versions.PARSER_VERSION,
+            chunk_schema_version=index_versions.CHUNK_SCHEMA_VERSION,
+            index_schema_version=context.index_schema_version,
+        )
+        if completed is None:
+            raise RuntimeError("reindex job lease ownership was lost")
+        await documents.commit()
 
     async def _replace(
         self,

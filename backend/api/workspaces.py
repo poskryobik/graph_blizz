@@ -9,7 +9,10 @@ import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
-from backend.config import PostgreSQLSettings
+from backend.config import ApplicationSettings, PostgreSQLSettings
+from backend.index_versions import active_index_contract
+from backend.jobs import JobRepository, JobStatus
+from backend.maintenance import WorkspaceReindexService
 from backend.security import (
     AuthorizedWorkspaceContext,
     IdentityResolver,
@@ -42,6 +45,14 @@ class WorkspaceResponse(BaseModel):
     updated_at: datetime
 
 
+class WorkspaceReindexResponse(BaseModel):
+    """Durable jobs created by one workspace maintenance request."""
+
+    workspace_id: UUID
+    status: JobStatus
+    job_ids: list[UUID]
+
+
 async def get_workspace_repository(
     request: Request,
 ) -> AsyncIterator[WorkspaceRepository]:
@@ -59,6 +70,28 @@ async def get_workspace_repository(
         sslmode=settings.ssl_mode,
     ) as connection:
         yield WorkspaceRepository(connection)
+
+
+async def get_reindex_service(
+    request: Request,
+) -> AsyncIterator[WorkspaceReindexService]:
+    """Provide maintenance persistence with a request-scoped transaction."""
+    application_settings = cast(ApplicationSettings, request.app.state.settings)
+    settings = application_settings.postgres
+    password = settings.password.get_secret_value() if settings.password else None
+    async with await psycopg.AsyncConnection.connect(
+        host=settings.host,
+        port=settings.port,
+        dbname=settings.database,
+        user=settings.username,
+        password=password,
+        sslmode=settings.ssl_mode,
+    ) as connection:
+        yield WorkspaceReindexService(
+            WorkspaceRepository(connection),
+            JobRepository(connection),
+            active_index_contract(application_settings.embedding),
+        )
 
 
 @router.post("", response_model=WorkspaceResponse, status_code=status.HTTP_201_CREATED)
@@ -85,6 +118,30 @@ async def get_workspace(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     await _authorize(request, workspace, Permission.WORKSPACE_READ)
     return WorkspaceResponse.model_validate(workspace, from_attributes=True)
+
+
+@router.post(
+    "/{workspace_id}/maintenance/reindex",
+    response_model=WorkspaceReindexResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def reindex_workspace(
+    workspace_id: UUID,
+    request: Request,
+    repository: Annotated[WorkspaceRepository, Depends(get_workspace_repository)],
+    service: Annotated[WorkspaceReindexService, Depends(get_reindex_service)],
+) -> WorkspaceReindexResponse:
+    """Authorize, reconcile the contract, and enqueue affected active revisions."""
+    workspace = await repository.get(workspace_id)
+    if workspace is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    await _authorize(request, workspace, Permission.INDEX_REBUILD)
+    jobs = await service.enqueue(workspace_id)
+    return WorkspaceReindexResponse(
+        workspace_id=workspace_id,
+        status=JobStatus.PENDING,
+        job_ids=[job.id for job in jobs],
+    )
 
 
 async def _authorize(

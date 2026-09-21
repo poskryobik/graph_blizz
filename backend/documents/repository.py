@@ -367,6 +367,81 @@ class DocumentRepository:
         row = await cursor.fetchone()
         return None if row is None else self._document(row)
 
+    async def complete_reindex_for_job(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+        revision: int,
+        job_id: UUID,
+        lease_owner: str,
+        attempt: int,
+        parser_version: int,
+        chunk_schema_version: int,
+        index_schema_version: int,
+    ) -> Document | None:
+        """Atomically confirm rebuilt derived data and its version metadata."""
+        cursor = await self._connection.execute(
+            f"""
+            WITH completed_job AS (
+                UPDATE graph_blizz.jobs
+                SET status = 'SUCCEEDED', lease_owner = NULL,
+                    lease_expires_at = NULL, heartbeat_at = NULL,
+                    finished_at = now(), updated_at = now()
+                WHERE id = %s AND document_id = %s AND document_revision = %s
+                  AND job_type = 'REINDEX_DOCUMENT'
+                  AND status = 'RUNNING' AND lease_owner = %s
+                  AND attempts = %s AND lease_expires_at > now()
+                  AND EXISTS (
+                      SELECT 1
+                      FROM graph_blizz.documents AS candidate
+                      JOIN graph_blizz.document_revisions AS candidate_revision
+                        ON candidate_revision.document_id = candidate.id
+                       AND candidate_revision.revision = candidate.active_revision
+                      WHERE candidate.workspace_id = %s
+                        AND candidate.id = %s AND candidate.status = 'READY'
+                        AND candidate.active_revision = %s
+                        AND candidate_revision.requires_reindex
+                  )
+                RETURNING id
+            ), updated_revision AS (
+                UPDATE graph_blizz.document_revisions AS r
+                SET parser_version = %s, chunk_schema_version = %s,
+                    index_schema_version = %s, requires_reindex = FALSE
+                FROM graph_blizz.documents AS d, completed_job
+                WHERE d.workspace_id = %s AND d.id = %s
+                  AND d.status = 'READY' AND d.active_revision = %s
+                  AND r.document_id = d.id AND r.revision = %s
+                  AND r.requires_reindex
+                RETURNING r.document_id
+            )
+            SELECT {self._COLUMNS}
+            FROM graph_blizz.documents AS d
+            JOIN graph_blizz.document_revisions AS r
+              ON r.document_id = d.id AND r.revision = d.active_revision
+            JOIN updated_revision ON updated_revision.document_id = d.id
+            """,
+            (
+                job_id,
+                document_id,
+                revision,
+                lease_owner,
+                attempt,
+                workspace_id,
+                document_id,
+                revision,
+                parser_version,
+                chunk_schema_version,
+                index_schema_version,
+                workspace_id,
+                document_id,
+                revision,
+                revision,
+            ),
+        )
+        row = await cursor.fetchone()
+        return None if row is None else self._document(row)
+
     async def transition_status(
         self,
         *,

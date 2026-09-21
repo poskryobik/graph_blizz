@@ -4,6 +4,7 @@
 
 ### Added
 
+- Добавлена durable maintenance-операция reindex workspace: worker перестраивает versioned derived indexes из сохранённых MinIO originals и продолжает работу после рестарта (F041).
 - Добавлено версионирование parser/chunk/index schema и embedding-профиля с явной пометкой данных, требующих reindex.
 
 ### Fixed

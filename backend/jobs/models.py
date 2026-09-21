@@ -23,6 +23,7 @@ class JobType(StrEnum):
 
     INDEX_DOCUMENT = "INDEX_DOCUMENT"
     DELETE_DOCUMENT = "DELETE_DOCUMENT"
+    REINDEX_DOCUMENT = "REINDEX_DOCUMENT"
 
 
 class JobErrorCode(StrEnum):
