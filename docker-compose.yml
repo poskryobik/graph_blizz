@@ -13,10 +13,14 @@ services:
       timeout: 5s
       retries: 30
       start_period: 10s
+    ports:
+      - "${GRAPH_BLIZZ_NEO4J_HTTP_PORT:-7474}:7474"
+      - "${GRAPH_BLIZZ_NEO4J_BOLT_PORT:-7687}:7687"
     volumes:
       - neo4j_data:/data
     networks:
       - backend
+      - host_access
 
   qdrant:
     image: qdrant/qdrant:v1.15.4

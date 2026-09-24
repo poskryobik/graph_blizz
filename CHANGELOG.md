@@ -6,6 +6,7 @@
 
 - Добавлена durable maintenance-операция reindex workspace: worker перестраивает versioned derived indexes из сохранённых MinIO originals и продолжает работу после рестарта (F041).
 - Добавлено версионирование parser/chunk/index schema и embedding-профиля с явной пометкой данных, требующих reindex.
+- Neo4j Browser/HTTP и Bolt опубликованы на настраиваемых host-портах `GRAPH_BLIZZ_NEO4J_HTTP_PORT` и `GRAPH_BLIZZ_NEO4J_BOLT_PORT` для диагностики в доверенной сети (F043).
 
 ### Fixed
 

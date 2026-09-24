@@ -57,18 +57,25 @@ Demo работает строго в owner-only режиме: все запро
 нет изоляции пользователей, memberships, RBAC или ACL, поэтому режим нельзя
 использовать как production-аутентификацию.
 
-PostgreSQL и Neo4j остаются доступны только сервисам в изолированной
-internal-сети.
+PostgreSQL остаётся доступен только сервисам в изолированной internal-сети.
 Web-интерфейсы доступны с host по следующим адресам:
 
 - API: `http://localhost:8000`, Swagger UI: `http://localhost:8000/docs`, ReDoc: `http://localhost:8000/redoc`;
 - MinIO S3 API: `http://localhost:9000`;
 - MinIO Console: `http://localhost:9001`.
-- Qdrant Web UI и REST API: `http://localhost:6333/dashboard` и `http://localhost:6333`.
+- Qdrant Web UI и REST API: `http://localhost:6333/dashboard` и `http://localhost:6333`;
+- Neo4j Browser/HTTP: `http://localhost:7474`;
+- Neo4j Bolt: `bolt://localhost:7687`.
+
+Neo4j принимает подключения с логином `neo4j` и паролем из
+`GRAPH_BLIZZ_NEO4J__PASSWORD`. Опубликованные порты Neo4j предназначены только
+для доверенной сети: пароль Neo4j не является пользовательской аутентификацией
+Graph Blizz и не заменяет ограничения network/firewall.
 
 Host-порты можно переопределить через `GRAPH_BLIZZ_API_PORT`,
-`GRAPH_BLIZZ_MINIO_API_PORT`, `GRAPH_BLIZZ_MINIO_CONSOLE_PORT` и
-`GRAPH_BLIZZ_QDRANT_PORT` соответственно.
+`GRAPH_BLIZZ_MINIO_API_PORT`, `GRAPH_BLIZZ_MINIO_CONSOLE_PORT`,
+`GRAPH_BLIZZ_QDRANT_PORT`, `GRAPH_BLIZZ_NEO4J_HTTP_PORT` и
+`GRAPH_BLIZZ_NEO4J_BOLT_PORT` соответственно.
 Например, `GRAPH_BLIZZ_API_PORT=8080 docker compose up -d --build --wait`
 опубликует Swagger UI по адресу `http://localhost:8080/docs`. Данные сохраняются
 в named volumes `postgres_data`, `minio_data`, `qdrant_data` и `neo4j_data`. Compose использует только
@@ -202,8 +209,10 @@ Qdrant доступен приложению по `http://qdrant:6333`. Внут
 
 Neo4j доступен приложению по `bolt://neo4j:7687`. Внутренний adapter
 `backend.storage.Neo4jConnectivity` проверяет Bolt-соединение и явно закрывает
-официальный driver. Сервис не публикует host-порты и отдельный публичный
-application endpoint для Neo4j не предоставляется.
+официальный driver. Compose публикует host-порты `7474` (Browser/HTTP) и `7687`
+(Bolt) для диагностики в доверенной сети; отдельный публичный application
+endpoint для Neo4j не предоставляется, а пароль Neo4j не является
+пользовательской аутентификацией Graph Blizz.
 
 ## Проверки
 

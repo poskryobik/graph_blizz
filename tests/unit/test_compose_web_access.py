@@ -11,6 +11,11 @@ COMPOSE_FILE = Path(__file__).parents[2] / "docker-compose.yml"
 def service_definition(name: str) -> str:
     """Return one top-level Compose service definition as source text."""
     compose = COMPOSE_FILE.read_text(encoding="utf-8")
+    compose = "".join(
+        line
+        for line in compose.splitlines(keepends=True)
+        if not line.lstrip().startswith("#")
+    )
     marker = f"  {name}:\n"
     start = compose.index(marker) + len(marker)
     next_service = re.search(r"(?m)^  [a-zA-Z0-9_-]+:\n", compose[start:])
@@ -42,7 +47,7 @@ def test_postgres_remains_internal_only() -> None:
     assert "host_access" not in postgres
 
 
-def test_neo4j_is_persistent_healthy_and_internal_only() -> None:
+def test_neo4j_publishes_configurable_http_and_bolt_ports() -> None:
     neo4j = service_definition("neo4j")
 
     assert "image: neo4j:2025.07.1-community" in neo4j
@@ -50,9 +55,9 @@ def test_neo4j_is_persistent_healthy_and_internal_only() -> None:
     assert "healthcheck:" in neo4j
     assert "cypher-shell" in neo4j
     assert '"RETURN 1"' in neo4j
-    assert "ports:" not in neo4j
-    assert "      - backend" in neo4j
-    assert "host_access" not in neo4j
+    assert '"${GRAPH_BLIZZ_NEO4J_HTTP_PORT:-7474}:7474"' in neo4j
+    assert '"${GRAPH_BLIZZ_NEO4J_BOLT_PORT:-7687}:7687"' in neo4j
+    assert "      - backend\n      - host_access" in neo4j
 
 
 def test_qdrant_publishes_configurable_web_port() -> None:
