@@ -118,6 +118,38 @@ def test_storage_key_is_immutable_and_schema_has_no_auth_dependencies(
     assert foreign_keys == "0"
 
 
+def test_workspace_description_is_nullable_and_defaults_to_null(
+    postgres_project: tuple[str, dict[str, str]],
+) -> None:
+    """Add an optional description without breaking existing workspace rows."""
+    project, environment = postgres_project
+    nullability = _psql(
+        project,
+        environment,
+        "SELECT is_nullable FROM information_schema.columns "
+        "WHERE table_schema = 'graph_blizz' AND table_name = 'workspaces' "
+        "AND column_name = 'description';",
+    )
+    assert nullability == "YES"
+
+    created = _psql(
+        project,
+        environment,
+        "INSERT INTO graph_blizz.workspaces (name, slug) "
+        "VALUES ('Described', 'described') "
+        "RETURNING (description IS NULL)::text;",
+    )
+    assert created == "true"
+
+    updated = _psql(
+        project,
+        environment,
+        "UPDATE graph_blizz.workspaces SET description = 'Architecture' "
+        "WHERE slug = 'described' RETURNING description;",
+    )
+    assert updated == "Architecture"
+
+
 def _psql(project: str, environment: dict[str, str], statement: str) -> str:
     result = _compose(
         project,

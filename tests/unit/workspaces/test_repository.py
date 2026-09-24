@@ -14,12 +14,17 @@ pytestmark = pytest.mark.unit
 WORKSPACE_ID = UUID("12345678-1234-5678-1234-567812345678")
 CREATED_AT = datetime(2026, 9, 17, 10, tzinfo=UTC)
 UPDATED_AT = datetime(2026, 9, 17, 11, tzinfo=UTC)
+EMBEDDING_PROFILE = (
+    '{"dimension":null,"model":"ai-sage/Giga-Embeddings-instruct-480M-0826",'
+    '"normalization":true}'
+)
 
 
 def _row(
     *,
     name: str = "Knowledge",
     slug: str = "knowledge",
+    description: str | None = None,
     updated_at: datetime = CREATED_AT,
 ) -> tuple[object, ...]:
     return (
@@ -30,6 +35,9 @@ def _row(
         "ACTIVE",
         CREATED_AT,
         updated_at,
+        1,
+        EMBEDDING_PROFILE,
+        description,
     )
 
 
@@ -49,11 +57,71 @@ def test_create_leaves_id_storage_key_status_and_timestamps_to_database() -> Non
     workspace = asyncio.run(repository.create(name="Knowledge", slug="knowledge"))
 
     statement, parameters = connection.execute.await_args.args
-    assert "INSERT INTO graph_blizz.workspaces (name, slug)" in statement
-    assert parameters == ("Knowledge", "knowledge")
+    assert "INSERT INTO graph_blizz.workspaces (name, slug, description)" in statement
+    assert "storage_key" not in statement.split("RETURNING", maxsplit=1)[0]
+    assert parameters == ("Knowledge", "knowledge", None)
     assert workspace.id == WORKSPACE_ID
     assert workspace.storage_key == "ws_0123456789abcdef0123456789abcdef"
     assert workspace.status is WorkspaceStatus.ACTIVE
+    assert workspace.description is None
+
+
+def test_create_persists_trimmed_description() -> None:
+    repository, connection = _repository(
+        _row(description="Architecture and source code")
+    )
+
+    workspace = asyncio.run(
+        repository.create(
+            name="Knowledge",
+            slug="knowledge",
+            description="  Architecture and source code  ",
+        )
+    )
+
+    _, parameters = connection.execute.await_args.args
+    assert parameters == ("Knowledge", "knowledge", "Architecture and source code")
+    assert workspace.description == "Architecture and source code"
+
+
+def test_create_stores_null_for_blank_description() -> None:
+    repository, connection = _repository(_row())
+
+    workspace = asyncio.run(
+        repository.create(name="Knowledge", slug="knowledge", description="  \n\t ")
+    )
+
+    _, parameters = connection.execute.await_args.args
+    assert parameters == ("Knowledge", "knowledge", None)
+    assert workspace.description is None
+
+
+def test_get_returns_persisted_description() -> None:
+    repository, _ = _repository(_row(description="Architecture and source code"))
+
+    workspace = asyncio.run(repository.get(WORKSPACE_ID))
+
+    assert workspace is not None
+    assert workspace.description == "Architecture and source code"
+
+
+def test_get_returns_null_description_for_pre_migration_row() -> None:
+    repository, _ = _repository(
+        (
+            WORKSPACE_ID,
+            "Knowledge",
+            "knowledge",
+            "ws_0123456789abcdef0123456789abcdef",
+            "ACTIVE",
+            CREATED_AT,
+            CREATED_AT,
+        )
+    )
+
+    workspace = asyncio.run(repository.get(WORKSPACE_ID))
+
+    assert workspace is not None
+    assert workspace.description is None
 
 
 def test_get_returns_workspace_and_missing_workspace() -> None:

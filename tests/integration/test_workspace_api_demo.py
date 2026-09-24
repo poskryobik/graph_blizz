@@ -34,6 +34,7 @@ def test_demo_owner_creates_and_reads_workspace_without_credentials() -> None:
         status=WorkspaceStatus.ACTIVE,
         created_at=NOW,
         updated_at=NOW,
+        description="Architecture and source code",
     )
     repository = AsyncMock()
     repository.create.return_value = workspace
@@ -53,7 +54,11 @@ def test_demo_owner_creates_and_reads_workspace_without_credentials() -> None:
         ) as client:
             created = await client.post(
                 "/workspaces",
-                json={"name": "Knowledge", "slug": "knowledge"},
+                json={
+                    "name": "Knowledge",
+                    "slug": "knowledge",
+                    "description": "Architecture and source code",
+                },
             )
             fetched = await client.get(f"/workspaces/{WORKSPACE_ID}")
             return created, fetched
@@ -62,8 +67,12 @@ def test_demo_owner_creates_and_reads_workspace_without_credentials() -> None:
 
     assert created.status_code == 201
     assert fetched.status_code == 200
+    assert created.json()["description"] == "Architecture and source code"
+    assert fetched.json()["description"] == "Architecture and source code"
     assert "storage_key" not in created.json()
     assert "storage_key" not in fetched.json()
+    forwarded = repository.create.await_args.kwargs["description"]
+    assert forwarded == "Architecture and source code"
     assert [call.args[2] for call in policy.authorize.await_args_list] == [
         Permission.WORKSPACE_MANAGE,
         Permission.WORKSPACE_READ,

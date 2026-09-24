@@ -7,7 +7,7 @@ from uuid import UUID
 
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, ConfigDict, StringConstraints
+from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator
 
 from backend.config import ApplicationSettings, PostgreSQLSettings
 from backend.index_versions import active_index_contract
@@ -23,6 +23,9 @@ from backend.workspaces import Workspace, WorkspaceRepository, WorkspaceStatus
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 NonEmptyText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+DescriptionText = Annotated[
+    str, StringConstraints(strip_whitespace=True, max_length=2000)
+]
 
 
 class WorkspaceCreate(BaseModel):
@@ -32,6 +35,13 @@ class WorkspaceCreate(BaseModel):
 
     name: NonEmptyText
     slug: NonEmptyText
+    description: DescriptionText | None = None
+
+    @field_validator("description")
+    @classmethod
+    def _blank_description_is_absent(cls, value: str | None) -> str | None:
+        """Treat a whitespace-only description as no description."""
+        return value or None
 
 
 class WorkspaceResponse(BaseModel):
@@ -40,6 +50,7 @@ class WorkspaceResponse(BaseModel):
     id: UUID
     name: str
     slug: str
+    description: str | None = None
     status: WorkspaceStatus
     created_at: datetime
     updated_at: datetime
@@ -101,7 +112,11 @@ async def create_workspace(
     repository: Annotated[WorkspaceRepository, Depends(get_workspace_repository)],
 ) -> WorkspaceResponse:
     """Create a workspace and authorize its owner-managed namespace."""
-    workspace = await repository.create(name=payload.name, slug=payload.slug)
+    workspace = await repository.create(
+        name=payload.name,
+        slug=payload.slug,
+        description=payload.description,
+    )
     await _authorize(request, workspace, Permission.WORKSPACE_MANAGE)
     return WorkspaceResponse.model_validate(workspace, from_attributes=True)
 

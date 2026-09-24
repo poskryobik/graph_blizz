@@ -275,10 +275,13 @@ memberships, RBAC или ACL. Другие auth modes не имеют неявн
 ## Workspace API
 
 В режиме `demo_owner` workspace создаётся запросом `POST /workspaces` с JSON-полями
-`name` и `slug`, а читается по UUID через `GET /workspaces/{workspace_id}`. Оба
-endpoint работают без `Authorization` header и перед доступом получают
-workspace-контекст через `DemoOwnerAccessPolicy`. Поле `storage_key` создаётся
-сервером, не принимается в запросе и не возвращается публичным API.
+`name`, `slug` и необязательным `description`, а читается по UUID через
+`GET /workspaces/{workspace_id}`. Оба endpoint работают без `Authorization` header
+и перед доступом получают workspace-контекст через `DemoOwnerAccessPolicy`.
+`description` тримится, пустое значение нормализуется в `null`, длина ограничена
+2000 символами (иначе `422`), и поле возвращается в create/get responses. Поле
+`storage_key` создаётся сервером, не принимается в запросе и не возвращается
+публичным API.
 
 `POST /workspaces/{workspace_id}/maintenance/reindex` с permission
 `index.rebuild` в одной транзакции сверяет workspace с текущим index contract,

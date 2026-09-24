@@ -27,6 +27,7 @@ class Workspace:
     status: WorkspaceStatus
     created_at: datetime
     updated_at: datetime
+    description: str | None = None
     index_schema_version: int = 1
     embedding_profile: str = (
         '{"dimension":null,"model":"ai-sage/Giga-Embeddings-instruct-480M-0826",'
@@ -39,22 +40,28 @@ class WorkspaceRepository:
 
     _COLUMNS = (
         "id, name, slug, storage_key, status, created_at, updated_at, "
-        "index_schema_version, embedding_profile"
+        "index_schema_version, embedding_profile, description"
     )
 
     def __init__(self, connection: AsyncConnection[Any]) -> None:
         """Bind repository operations to a caller-owned database connection."""
         self._connection = connection
 
-    async def create(self, *, name: str, slug: str) -> Workspace:
+    async def create(
+        self,
+        *,
+        name: str,
+        slug: str,
+        description: str | None = None,
+    ) -> Workspace:
         """Create a workspace with a database-generated physical storage key."""
         cursor = await self._connection.execute(
             f"""
-            INSERT INTO graph_blizz.workspaces (name, slug)
-            VALUES (%s, %s)
+            INSERT INTO graph_blizz.workspaces (name, slug, description)
+            VALUES (%s, %s, %s)
             RETURNING {self._COLUMNS}
             """,
-            (name, slug),
+            (name, slug, self._normalize_description(description)),
         )
         return self._workspace(await cursor.fetchone())
 
@@ -155,6 +162,14 @@ class WorkspaceRepository:
         return None if row is None else self._workspace(row)
 
     @staticmethod
+    def _normalize_description(description: str | None) -> str | None:
+        """Trim a description and treat a blank value as absent."""
+        if description is None:
+            return None
+        normalized = description.strip()
+        return normalized or None
+
+    @staticmethod
     def _workspace(row: tuple[Any, ...] | None) -> Workspace:
         """Map the fixed repository projection to a workspace entity."""
         if row is None:
@@ -174,4 +189,5 @@ class WorkspaceRepository:
                 else '{"dimension":null,"model":"ai-sage/'
                 'Giga-Embeddings-instruct-480M-0826","normalization":true}'
             ),
+            description=row[9] if len(row) > 9 else None,
         )
