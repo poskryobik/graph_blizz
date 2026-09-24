@@ -1,4 +1,4 @@
-"""Opt-in verification of the real GPU-backed vLLM embedding endpoint."""
+"""Opt-in verification of an explicitly configured live vLLM endpoint."""
 
 import json
 import os
@@ -13,13 +13,15 @@ MODEL = "ai-sage/Giga-Embeddings-instruct-480M-0826"
 
 
 def test_vllm_returns_openai_compatible_embedding() -> None:
-    if os.getenv("GRAPH_BLIZZ_RUN_GPU_TESTS") != "1":
-        pytest.skip("set GRAPH_BLIZZ_RUN_GPU_TESTS=1 after starting the GPU profile")
+    base_url = os.getenv("GRAPH_BLIZZ_EMBEDDING_LIVE_BASE_URL")
+    if not base_url:
+        pytest.skip(
+            "set GRAPH_BLIZZ_EMBEDDING_LIVE_BASE_URL to a live OpenAI-compatible "
+            "embedding endpoint"
+        )
 
-    base_url = os.getenv(
-        "GRAPH_BLIZZ_EMBEDDING_HOST_BASE_URL", "http://localhost:8001/v1"
-    )
-    payload = json.dumps({"model": MODEL, "input": ["Граф знаний"]}).encode()
+    model = os.getenv("GRAPH_BLIZZ_EMBEDDING__MODEL", MODEL)
+    payload = json.dumps({"model": model, "input": ["Граф знаний"]}).encode()
     request = urllib.request.Request(
         f"{base_url.rstrip('/')}/embeddings",
         data=payload,
@@ -34,7 +36,7 @@ def test_vllm_returns_openai_compatible_embedding() -> None:
         pytest.fail(f"vLLM embedding endpoint is unavailable or invalid: {error}")
 
     assert body["object"] == "list"
-    assert body["model"] == MODEL
+    assert body["model"] == model
     assert len(body["data"]) == 1
     assert body["data"][0]["object"] == "embedding"
     assert body["data"][0]["index"] == 0

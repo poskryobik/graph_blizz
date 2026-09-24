@@ -8,6 +8,10 @@
 - Добавлено версионирование parser/chunk/index schema и embedding-профиля с явной пометкой данных, требующих reindex.
 - Neo4j Browser/HTTP и Bolt опубликованы на настраиваемых host-портах `GRAPH_BLIZZ_NEO4J_HTTP_PORT` и `GRAPH_BLIZZ_NEO4J_BOLT_PORT` для диагностики в доверенной сети (F043).
 
+### Changed
+
+- `rag-api` и `rag-worker` используют единый внешний OpenAI-compatible vLLM embedding endpoint, а встроенный Compose-сервис `vllm-embeddings` с GPU profile, NVIDIA reservation и Hugging Face cache удалён (F044).
+
 ### Fixed
 
 - `rag-worker` теперь автоматически перезапускается после сбоя или рестарта PostgreSQL и продолжает expired `RUNNING` job с прежними document/job/revision identity (F035).

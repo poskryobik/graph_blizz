@@ -74,6 +74,6 @@ async def check_models():
         await llm.complete([{"role": "user", "content": "Reply READY"}])
 
 asyncio.run(check_models())
-' || fail "Model readiness failed. Start the gpu profile for the default embedding endpoint or configure GRAPH_BLIZZ_COMPOSE_EMBEDDING_BASE_URL; also ensure GRAPH_BLIZZ_COMPOSE_EXTERNAL_LLM_BASE_URL is reachable from rag-api."
+' || fail "Model readiness failed. Ensure the external embedding endpoint set by GRAPH_BLIZZ_COMPOSE_EMBEDDING_BASE_URL is reachable from rag-api and serves the configured model; also ensure GRAPH_BLIZZ_COMPOSE_EXTERNAL_LLM_BASE_URL is reachable from rag-api."
 
 printf 'Demo is ready at http://localhost:${GRAPH_BLIZZ_API_PORT:-8000}.\n'
