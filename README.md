@@ -283,6 +283,11 @@ memberships, RBAC или ACL. Другие auth modes не имеют неявн
 `storage_key` создаётся сервером, не принимается в запросе и не возвращается
 публичным API.
 
+`GET /workspaces` возвращает все workspaces с публичными полями `id`, `name`,
+`slug`, `description`, `status`, `created_at`, `updated_at` в детерминированном
+порядке `created_at`, `id`. Endpoint также работает без `Authorization` header,
+не требует workspace-контекста и не инициализирует LightRAG runtime.
+
 `POST /workspaces/{workspace_id}/maintenance/reindex` с permission
 `index.rebuild` в одной транзакции сверяет workspace с текущим index contract,
 помечает несовместимые активные revisions и создаёт для них durable

@@ -135,6 +135,22 @@ async def get_workspace(
     return WorkspaceResponse.model_validate(workspace, from_attributes=True)
 
 
+@router.get("", response_model=list[WorkspaceResponse])
+async def list_workspaces(
+    repository: Annotated[WorkspaceRepository, Depends(get_workspace_repository)],
+) -> list[WorkspaceResponse]:
+    """List every workspace without consulting a LightRAG runtime.
+
+    Listing spans workspaces, so the workspace-scoped access policy has no
+    concrete workspace to authorize; DemoOwner mode exposes the owner's
+    workspaces directly.
+    """
+    return [
+        WorkspaceResponse.model_validate(workspace, from_attributes=True)
+        for workspace in await repository.list()
+    ]
+
+
 @router.post(
     "/{workspace_id}/maintenance/reindex",
     response_model=WorkspaceReindexResponse,

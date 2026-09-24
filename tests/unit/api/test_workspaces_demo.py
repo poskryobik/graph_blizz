@@ -16,7 +16,9 @@ from backend.workspaces import Workspace, WorkspaceStatus
 pytestmark = pytest.mark.unit
 
 WORKSPACE_ID = UUID("12345678-1234-5678-1234-567812345678")
+EARLIER_WORKSPACE_ID = UUID("87654321-4321-8765-4321-876543218765")
 NOW = datetime(2026, 9, 17, 10, tzinfo=UTC)
+EARLIER = datetime(2026, 9, 17, 9, tzinfo=UTC)
 WORKSPACE = Workspace(
     id=WORKSPACE_ID,
     name="Knowledge",
@@ -27,6 +29,24 @@ WORKSPACE = Workspace(
     updated_at=NOW,
     description="Architecture and source code",
 )
+EARLIER_WORKSPACE = Workspace(
+    id=EARLIER_WORKSPACE_ID,
+    name="Earlier",
+    slug="earlier",
+    storage_key="ws_earlier_generated",
+    status=WorkspaceStatus.ACTIVE,
+    created_at=EARLIER,
+    updated_at=EARLIER,
+)
+PUBLIC_FIELDS = {
+    "id",
+    "name",
+    "slug",
+    "description",
+    "status",
+    "created_at",
+    "updated_at",
+}
 
 
 def _request(method: str, path: str, *, json: dict[str, str] | None = None) -> Response:
@@ -271,3 +291,74 @@ def test_missing_required_permission_is_forbidden() -> None:
 
     response = asyncio.run(get())
     assert response.status_code == 403
+
+
+def test_list_returns_all_workspaces_in_order_without_physical_fields() -> None:
+    application = create_app()
+    repository = AsyncMock()
+    repository.list.return_value = [EARLIER_WORKSPACE, WORKSPACE]
+
+    async def override_repository():  # type: ignore[no-untyped-def]
+        yield repository
+
+    application.dependency_overrides[get_workspace_repository] = override_repository
+
+    async def get() -> Response:
+        transport = ASGITransport(app=application)
+        async with AsyncClient(
+            transport=transport, base_url="http://testserver"
+        ) as client:
+            return await client.get("/workspaces")
+
+    response = asyncio.run(get())
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": str(EARLIER_WORKSPACE_ID),
+            "name": "Earlier",
+            "slug": "earlier",
+            "description": None,
+            "status": "ACTIVE",
+            "created_at": "2026-09-17T09:00:00Z",
+            "updated_at": "2026-09-17T09:00:00Z",
+        },
+        {
+            "id": str(WORKSPACE_ID),
+            "name": "Knowledge",
+            "slug": "knowledge",
+            "description": "Architecture and source code",
+            "status": "ACTIVE",
+            "created_at": "2026-09-17T10:00:00Z",
+            "updated_at": "2026-09-17T10:00:00Z",
+        },
+    ]
+    repository.list.assert_awaited_once_with()
+    assert all(set(item) == PUBLIC_FIELDS for item in response.json())
+
+
+def test_list_needs_no_authorization_and_leaves_runtime_registry_untouched() -> None:
+    application = create_app()
+    repository = AsyncMock()
+    repository.list.return_value = [WORKSPACE]
+
+    async def override_repository():  # type: ignore[no-untyped-def]
+        yield repository
+
+    application.dependency_overrides[get_workspace_repository] = override_repository
+    registry = application.state.runtime_registry
+    runtime_get = AsyncMock()
+    registry.get = runtime_get
+
+    async def get() -> Response:
+        transport = ASGITransport(app=application)
+        async with AsyncClient(
+            transport=transport, base_url="http://testserver"
+        ) as client:
+            return await client.get("/workspaces", headers={})
+
+    response = asyncio.run(get())
+
+    assert response.status_code == 200
+    runtime_get.assert_not_awaited()
+    assert registry._runtimes == {}

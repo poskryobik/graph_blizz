@@ -134,6 +134,20 @@ def test_get_returns_workspace_and_missing_workspace() -> None:
     assert asyncio.run(repository.get(WORKSPACE_ID)) is None
 
 
+def test_list_orders_workspaces_by_creation_time_and_id() -> None:
+    repository, connection = _repository(_row())
+    connection.execute.return_value.fetchall.return_value = [
+        _row(),
+        _row(name="Earlier", slug="earlier"),
+    ]
+
+    workspaces = asyncio.run(repository.list())
+
+    assert "ORDER BY created_at, id" in connection.execute.await_args.args[0]
+    assert len(connection.execute.await_args.args) == 1
+    assert [workspace.name for workspace in workspaces] == ["Knowledge", "Earlier"]
+
+
 def test_rename_changes_name_and_slug_without_writing_storage_key() -> None:
     repository, connection = _repository(
         _row(name="Renamed", slug="renamed", updated_at=UPDATED_AT)

@@ -78,6 +78,17 @@ class WorkspaceRepository:
         row = await cursor.fetchone()
         return None if row is None else self._workspace(row)
 
+    async def list(self) -> list[Workspace]:
+        """Return every workspace in deterministic creation order."""
+        cursor = await self._connection.execute(
+            f"""
+            SELECT {self._COLUMNS}
+            FROM graph_blizz.workspaces
+            ORDER BY created_at, id
+            """,
+        )
+        return [self._workspace(row) for row in await cursor.fetchall()]
+
     async def rename(
         self,
         workspace_id: UUID,
