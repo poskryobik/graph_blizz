@@ -1,1155 +1,434 @@
-# Архитектура Graph RAG Platform — greenfield Demo/MVP-first
+# Архитектура Graph Blizz — REST API и MCP
 
-## 1. Назначение системы
+## 1. Назначение и текущее состояние
 
-Система представляет собой multi-workspace Graph RAG-платформу для загрузки текстовых документов и исходного кода, построения knowledge graph и vector index, а также выполнения запросов по накопленным знаниям.
+Graph Blizz — single-tenant Graph RAG-сервис для нескольких логически изолированных
+workspace. Система загружает текстовые документы и исходный код, хранит оригиналы,
+строит vector index и knowledge graph, а затем отвечает на вопросы с указанием
+источников.
 
-Основной Graph RAG engine — **LightRAG Core**. Для graph storage используется **Neo4j**, для vector storage — **Qdrant**, для application metadata и workflow state — **PostgreSQL**, для оригинальных файлов — **S3-compatible object storage (MinIO)**. Embedding-модель обслуживается отдельным **vLLM** на NVIDIA GPU. Генеративная модель подключается через настраиваемый OpenAI-compatible API.
+Базовый MVP уже реализован: создание workspace, асинхронная индексация, immutable
+document revisions, update/delete/reindex, восстановление jobs после рестарта,
+workspace isolation и Graph RAG query. Дальнейшая разработка не возвращается к
+greenfield-плану, а развивает существующий REST API.
 
-Архитектура проектируется **с полного нуля**. Никакая часть OIDC, RBAC, ACL, service accounts, member management или production security не считается уже реализованной или обязательной для запуска Demo/MVP.
+Ближайшая цель состоит из двух последовательных этапов:
 
-Главная цель первого этапа — максимально короткий работающий сценарий:
+1. завершить REST-контур: открыть Neo4j для работы с host, использовать внешний
+   ранее развернутый vLLM embeddings endpoint и добавить список workspace с
+   описаниями;
+2. поверх стабильного REST API реализовать отдельный MCP server.
 
-```text
-start stack
-    -> create workspace
-    -> upload document
-    -> index with LightRAG
-    -> query workspace
-    -> receive answer + source metadata
+## 2. Архитектурные принципы
+
+1. **Без авторизации.** Login, users, JWT, OIDC, API keys, RBAC, ACL, memberships и
+   service accounts не входят ни в текущий этап, ни в утверждённый roadmap.
+2. **Доверенный контур.** REST API, MCP server и опубликованные storage-порты
+   разворачиваются только в доверенной сети. Публикация порта не превращает storage
+   в публичный application API.
+3. **REST API — единственная прикладная граница.** MCP server вызывает существующий
+   HTTP API и не обращается напрямую к PostgreSQL, MinIO, Qdrant, Neo4j или
+   LightRAG.
+4. **Внешние model endpoints.** Graph Blizz не разворачивает embedding-модель.
+   Embeddings и generation вызываются через настраиваемые OpenAI-compatible API.
+5. **Изоляция workspace без пользовательских прав.** `workspace_id` определяет
+   логическую область данных, а серверный `storage_key` — физические namespace.
+   Клиент не может передать или изменить `storage_key`.
+6. **Source of truth отделён от derived data.** PostgreSQL и MinIO содержат
+   восстанавливаемые данные; Qdrant и Neo4j можно перестроить через reindex.
+7. **Durable background processing.** Изменяющие индекс операции проходят через
+   PostgreSQL jobs и `rag-worker`, а не выполняются внутри длительного HTTP request.
+
+## 3. Что сознательно не входит в scope
+
+- аутентификация и авторизация любого вида;
+- управление пользователями, ролями и участниками workspace;
+- встроенное развёртывание vLLM или иной embedding-модели;
+- управление GPU, Hugging Face cache и model lifecycle;
+- прямой доступ MCP server к внутренним storage;
+- Kubernetes/Helm и публичный Internet deployment;
+- multi-tenant security boundary между недоверенными пользователями.
+
+Если сервис потребуется выставить в недоверенную сеть, защита должна быть добавлена
+на инфраструктурном уровне отдельным решением. Это не является частью текущей
+архитектуры и списка задач.
+
+## 4. Контекст системы
+
+```mermaid
+flowchart TB
+    C["REST clients"] --> API["rag-api"]
+    MC["MCP clients"] --> MCP["graph-blizz-mcp"]
+    MCP -->|HTTP| API
+    API --> PG["PostgreSQL"]
+    API --> MINIO["MinIO"]
+    API --> QD["Qdrant"]
+    API --> NEO["Neo4j"]
+    API --> EMB["Existing vLLM embeddings"]
+    API --> LLM["OpenAI-compatible LLM"]
+    W["rag-worker"] --> PG
+    W --> MINIO
+    W --> QD
+    W --> NEO
+    W --> EMB
+    W --> LLM
 ```
 
-До завершения MVP система работает от одного доверенного владельца через явный `demo_owner` security adapter. Отсутствие полноценной пользовательской авторизации не должно отключать или ограничивать workspace, document, indexing и query functionality.
-
----
+`graph-blizz-mcp` появляется только после завершения текущего REST-этапа. До этого
+все функции доступны через `rag-api` и Swagger/ReDoc.
 
-## 2. Приоритеты и границы
-
-Приоритеты расположены в следующем порядке:
+## 5. Компоненты
 
-1. получить воспроизводимый end-to-end Graph RAG Demo;
-2. превратить Demo в устойчивый single-owner MVP;
-3. только после этого добавить полноценную multi-user security model;
-4. затем добавить production hardening, observability и deployment capabilities.
+### 5.1. `rag-api`
 
-На Demo/MVP сознательно **не являются prerequisite**:
-
-- внешний Identity Provider;
-- JWT/OIDC validation;
-- таблицы пользователей и service accounts;
-- workspace membership;
-- RBAC/ACL enforcement для разных пользователей;
-- member management API;
-- authorization isolation между пользователями;
-- distributed tracing;
-- Kubernetes;
-- MCP;
-- production-grade disaster recovery.
-
-При этом архитектурная граница security вводится с самого начала, чтобы позднее заменить owner-заглушку на OIDC/RBAC без переписывания Graph RAG domain logic.
+FastAPI-приложение предоставляет:
 
----
+- health/readiness endpoints;
+- create/get/list workspace;
+- upload, upsert, list, get и delete document;
+- enqueue workspace reindex;
+- Graph RAG query с source metadata;
+- OpenAPI contract для REST- и MCP-клиентов.
 
-## 3. Этапы разработки
+API валидирует входные данные, разрешает server-side workspace namespace,
+сохраняет metadata и source, создаёт durable jobs и возвращает стабильную error
+model. API не принимает identity credentials и не выполняет permission checks как
+часть продуктового контракта.
 
-### 3.1. Demo
+В текущем коде могут сохраняться `DemoOwnerIdentityResolver`,
+`DemoOwnerAccessPolicy` и `AuthorizedWorkspaceContext` как совместимый внутренний
+adapter. Они не принимают credentials, не создают user tables и не являются
+отдельной функцией авторизации; при дальнейшей чистке их можно заменить на простой
+trusted-request context без изменения REST contract.
 
-Demo считается готовым, когда на чистом репозитории и чистых persistent volumes можно:
+### 5.2. `rag-worker`
 
-1. запустить `./scripts/init.sh`;
-2. дождаться readiness основных сервисов;
-3. создать workspace;
-4. загрузить `.txt`, `.md` или текстовый source-code файл;
-5. сохранить оригинальный файл в MinIO;
-6. проиндексировать документ через LightRAG;
-7. выполнить query в том же workspace;
-8. получить ответ и `document_id`/filename источника;
-9. диагностировать ошибку по `request_id` в structured logs.
+Worker получает jobs из PostgreSQL по lease-модели, обновляет heartbeat, выполняет
+retry с ограничением числа попыток и завершает job только при действующем lease.
+Он использует общий `IndexingService` и поддерживаемые операции LightRAG для
+insert, replace, delete и reindex.
 
-Допустимые упрощения Demo:
+### 5.3. LightRAG runtime
 
-- один логический владелец;
-- нет JWT/OIDC;
-- нет member API;
-- indexing может выполняться inline внутри API request;
-- нет durable job queue;
-- нет document revisions;
-- код может парситься как обычный текст;
-- только минимальная provenance information.
+Для workspace лениво создаётся runtime, физический namespace которого вычисляется
+из серверного `storage_key` и текущей версии index contract. Runtime связывает:
 
-### 3.2. MVP
+- PostgreSQL-backed внутреннее состояние LightRAG;
+- Qdrant vector storage;
+- Neo4j graph storage;
+- внешний embedding endpoint;
+- внешний generation endpoint.
 
-MVP превращает Demo в устойчивый single-owner Graph RAG:
+### 5.4. PostgreSQL
 
-- immutable document revisions;
-- durable jobs;
-- отдельный `rag-worker`;
-- idempotent upsert;
-- update/delete lifecycle;
-- retry/restart recovery;
-- AST-aware parsing;
-- rich provenance;
-- reindex;
-- multi-workspace data isolation;
-- persistence/restart E2E.
+PostgreSQL хранит application metadata и workflow state:
 
-Security всё ещё может работать в `demo_owner` mode.
+- `workspaces`;
+- `documents` и immutable `document_revisions`;
+- durable indexing/delete/reindex jobs;
+- parser/chunk/index versions и embedding profile identity.
 
-### 3.3. Post-MVP
+Схема `graph_blizz` изменяется только версионируемыми Alembic migrations.
 
-После функционального MVP реализуются:
+### 5.5. MinIO
 
-- persisted principals;
-- OIDC authentication;
-- workspace membership;
-- RBAC/ACL;
-- service accounts;
-- member management;
-- authorization isolation E2E;
-- расширенный audit;
-- network/secrets hardening;
-- OpenTelemetry;
-- Kubernetes-readiness;
-- MCP facade;
-- disaster-recovery automation.
-
----
-
-## 4. Security boundary с первого дня
-
-Graph RAG domain services не должны зависеть напрямую от JWT claims, OIDC middleware или ACL tables.
-
-Вводятся application-level контракты:
-
-```python
-class IdentityResolver(Protocol):
-    async def resolve(self, request) -> PrincipalContext:
-        ...
-
-
-class WorkspaceAccessPolicy(Protocol):
-    async def authorize(
-        self,
-        principal: PrincipalContext,
-        workspace: Workspace,
-        permission: Permission,
-    ) -> AuthorizedWorkspaceContext:
-        ...
-```
-
-`WorkspaceService`, `DocumentService`, `IndexingService`, `QueryService` и LightRAG runtime boundary используют только нормализованный `AuthorizedWorkspaceContext`.
-
-### Demo/MVP implementation
-
-```text
-DemoOwnerIdentityResolver
-DemoOwnerAccessPolicy
-```
-
-### Post-MVP implementation
-
-```text
-OIDCIdentityResolver
-RBACWorkspaceAccessPolicy
-```
-
-Таким образом, authentication/authorization является заменяемым adapter layer, а не prerequisite Graph RAG functionality.
-
----
-
-## 5. Demo owner mode
-
-Для Demo/MVP используется:
-
-```text
-GRAPH_BLIZZ_AUTH__MODE=demo_owner
-```
-
-В этом режиме:
-
-- `Authorization` header не требуется;
-- внешний IdP не нужен;
-- JWT не валидируется;
-- таблицы principals/memberships не нужны для принятия решения;
-- каждый HTTP request получает один bootstrap owner identity из application configuration;
-- owner получает все permissions, необходимые для Demo/MVP operations.
-
-Пример контекста:
-
-```python
-AuthorizedWorkspaceContext(
-    principal_id=DEMO_OWNER_ID,
-    principal_type=PrincipalType.USER,
-    workspace_id=workspace.id,
-    storage_key=workspace.storage_key,
-    permissions=ALL_OWNER_PERMISSIONS,
-)
-```
-
-`DEMO_OWNER_ID` — технический идентификатор runtime actor. Он не означает наличие полноценной user database.
-
-Для безопасности конфигурации `demo_owner` должен считаться development/demo mode. Production deployment после внедрения OIDC должен запускаться с production security adapter и не иметь неявного fallback в `demo_owner`.
-
----
-
-## 6. Demo architecture
-
-```text
-                         ┌────────────────────┐
-                         │      Clients       │
-                         │  curl / UI / CLI   │
-                         └─────────┬──────────┘
-                                   │ HTTP
-                                   ▼
-┌─────────────────────────────────────────────────────────────┐
-│                         rag-api                             │
-│                                                             │
-│  DemoOwnerIdentityResolver                                  │
-│  DemoOwnerAccessPolicy                                      │
-│  WorkspaceService                                           │
-│  DocumentService                                            │
-│  IndexingService                                            │
-│  QueryService                                               │
-│  LightRAGRuntimeRegistry                                    │
-│  structured logging                                         │
-└───────┬───────────┬────────────┬────────────┬───────────────┘
-        │           │            │            │
-        ▼           ▼            ▼            ▼
-   PostgreSQL     MinIO        Qdrant       Neo4j
-        │
-        └─────────────────────┐
-                              ▼
-                         LightRAG Core
-                              │
-                    ┌─────────┴─────────┐
-                    ▼                   ▼
-             vLLM embeddings      External LLM
-```
-
-На Demo отдельный `rag-worker` отсутствует.
-
----
-
-## 7. MVP architecture
-
-После подтверждения Demo indexing переносится в durable worker без переписывания domain use case:
-
-```text
-Client
-  │
-  ▼
-rag-api
-  │
-  ├── PostgreSQL metadata/jobs
-  ├── MinIO source
-  │
-  ▼
-job = PENDING
-
-rag-worker
-  │
-  ├── claim job
-  ├── heartbeat / retry
-  ▼
-IndexingService
-  │
-  ▼
-LightRAG Core
-  ├── PostgreSQL LightRAG storage
-  ├── Qdrant
-  ├── Neo4j
-  ├── vLLM embeddings
-  └── External LLM
-```
-
-Ключевой инвариант: переход `inline -> worker` меняет orchestration, но не core indexing logic.
-
----
-
-## 8. `rag-api`
-
-`rag-api` — единственная пользовательская HTTP boundary Graph RAG.
-
-Предпочтительная реализация — FastAPI.
-
-### Demo responsibilities
-
-- health/readiness;
-- DemoOwner identity/access adapter;
-- workspace CRUD;
-- document upload/read;
-- durable upload job creation с ответом `PENDING` и `job_id`;
-- Graph RAG query;
-- stable application errors;
-- request correlation и structured logging.
+MinIO хранит оригинальные байты каждой document revision. Source сохраняется до
+индексации и остаётся доступным после ошибок, поэтому derived index можно
+перестроить без повторной загрузки файла пользователем.
 
-### MVP additions
+### 5.6. Qdrant
 
-- job status;
-- update/delete;
-- reindex;
-- richer source metadata.
+Qdrant хранит vector index, разделённый по versioned workspace namespace.
+Приложение не предоставляет прокси к произвольным Qdrant operations.
 
-### Post-MVP additions
+### 5.7. Neo4j
 
-- OIDC authentication;
-- real RBAC/ACL;
-- member management;
-- security audit coverage.
+Neo4j хранит knowledge graph LightRAG. Compose публикует оба стандартных интерфейса:
 
----
+- HTTP Browser/API: `${GRAPH_BLIZZ_NEO4J_HTTP_PORT:-7474}:7474`;
+- Bolt: `${GRAPH_BLIZZ_NEO4J_BOLT_PORT:-7687}:7687`.
 
-## 9. Workspace
+`rag-api` и `rag-worker` продолжают использовать внутренний адрес
+`bolt://neo4j:7687`. Опубликованные host-порты нужны для Neo4j Browser, диагностики
+и ручных Cypher-запросов в доверенной среде. Пароль остаётся обязательным, но не
+считается пользовательской авторизацией Graph Blizz.
 
-Workspace — основной scope изоляции knowledge base с первого дня.
+### 5.8. Внешний vLLM embeddings endpoint
 
-Минимальная модель:
+Embedding-модель уже развёрнута отдельно от Graph Blizz. В `docker-compose.yml` не
+должно быть сервиса `vllm-embeddings`, GPU reservation, Hugging Face cache или
+profile для запуска модели.
 
-```text
-workspaces
-----------
-id          UUID
-name        string
-slug        string
-storage_key string
-status      ACTIVE | ARCHIVED
-created_at
-updated_at
-```
-
-`storage_key`:
+Оба процесса Graph Blizz используют одинаковые настройки:
 
-- генерируется сервером;
-- уникален;
-- не зависит от `name`/`slug`;
-- не меняется при rename;
-- используется как physical LightRAG namespace;
-- не принимается из пользовательского request body.
+- `GRAPH_BLIZZ_EMBEDDING__BASE_URL` — OpenAI-compatible base URL, включая `/v1`;
+- `GRAPH_BLIZZ_EMBEDDING__MODEL` — имя модели на внешнем vLLM;
+- `GRAPH_BLIZZ_EMBEDDING__DIMENSION` — ожидаемая размерность;
+- `GRAPH_BLIZZ_EMBEDDING__API_KEY` — необязательный provider credential;
+- `GRAPH_BLIZZ_EMBEDDING__TIMEOUT_SECONDS` — timeout вызова.
 
-На Demo/MVP все workspace принадлежат одному логическому владельцу приложения. Персональные membership записи появятся только Post-MVP.
+Для контейнеров endpoint передаётся через
+`GRAPH_BLIZZ_COMPOSE_EMBEDDING_BASE_URL`. Значение по умолчанию не должно ссылаться
+на удалённый Compose service. `scripts/init.sh` проверяет доступность настроенного
+endpoint, но не пытается его запускать или загружать модель.
 
----
+Изменение модели или dimension меняет embedding profile и требует reindex, чтобы
+несовместимые vectors не смешивались в одном namespace.
 
-## 10. PostgreSQL
+### 5.9. Внешний LLM endpoint
 
-PostgreSQL хранит application metadata и позднее durable workflow state.
+Generation/extraction выполняются через настраиваемый OpenAI-compatible API.
+Клиент содержит timeout, безопасное отображение provider errors и не логирует
+prompts или полные responses.
 
-### До F027
+## 6. Модель workspace
 
-```text
-app.workspaces
-app.documents
-```
+Workspace содержит:
 
-### С F028
+| Поле | Назначение |
+|---|---|
+| `id` | Публичный UUID |
+| `name` | Отображаемое имя |
+| `slug` | Стабильный человекочитаемый идентификатор |
+| `description` | Необязательное описание назначения и содержимого workspace |
+| `storage_key` | Непубличный immutable physical namespace |
+| `status` | `ACTIVE` или `ARCHIVED` |
+| `index_schema_version` | Версия index contract |
+| `embedding_profile` | Identity модели, dimension и normalization |
+| `created_at`, `updated_at` | Временные метки |
 
-```text
-app.document_revisions
-app.jobs
-app.workspace_settings
-```
-
-### Post-MVP security
+`description` хранится в PostgreSQL, задаётся при создании workspace и возвращается
+в публичных create/get/list responses. Пустое описание нормализуется в `null`;
+рекомендуемый предел — 2000 символов.
 
-```text
-app.principals
-app.workspace_members
-app.audit_events
-```
-
-При необходимости multi-tenant model также добавляется Post-MVP отдельной migration, а не блокирует Demo.
-
-LightRAG PostgreSQL-backed storage логически отделяется от application schema:
-
-```text
-app.*
-lightrag.*
-```
-
-Application migrations не должны управлять внутренней схемой LightRAG.
-
----
-
-## 11. Object storage
-
-Оригинальный source обязательно сохраняется в MinIO/S3 **до** индексирования.
-
-Demo object key:
-
-```text
-workspace/{workspace_id}/document/{document_id}/source
-```
-
-После введения revisions в MVP:
-
-```text
-workspace/{workspace_id}/document/{document_id}/revision/{revision}/source
-```
-
-Source object является основанием для retry/reindex/recovery.
-
----
-
-## 12. Document model — до F027
-
-Минимальная таблица:
-
-```text
-documents
----------
-id
-workspace_id
-source_key
-filename
-source_type
-object_uri
-content_hash
-status
-created_at
-updated_at
-```
-
-Статусы:
-
-```text
-UPLOADED
-INDEXING
-READY
-FAILED
-```
-
-Для Demo достаточно первой загрузки logical document. Update/delete/revisions не входят в critical path.
-
----
-
-## 13. Document model — с F027
-
-После Demo добавляются:
-
-```text
-documents
-    id
-    workspace_id
-    source_key
-    active_revision
-    status
-
-
-document_revisions
-    document_id
-    revision
-    content_hash
-    object_uri
-    parser_version
-    chunk_schema_version
-    index_schema_version
-    created_at
-```
-
-Правила совместимости физического индекса зафиксированы в
-[ADR 0020](decisions/0020-versioned-index-namespaces.md).
-
-`document_id` остаётся стабильным между версиями.
-
-Одинаковый SHA-256 при upsert означает idempotent NOOP.
-
-Новые source-объекты получают ключ
-`workspace/{workspace_id}/document/{document_id}/revision/{revision}/source`.
-Старые Demo-строки мигрируют в ревизию 1 с сохранением существующего URI; SQL
-migration не перемещает объекты в MinIO.
-
----
-
-## 14. Parsing
-
-### Demo
-
-```text
-.txt  -> PlainTextParser
-.md   -> MarkdownParser
-.py   -> PlainTextParser
-.js   -> PlainTextParser
-.ts   -> PlainTextParser
-.tsx  -> PlainTextParser
-.java -> PlainTextParser
-.go   -> PlainTextParser
-```
-
-Цель — доказать end-to-end retrieval, а не сразу максимизировать качество code chunking.
-
-### MVP
-
-Добавляется Tree-sitter и semantic chunking по:
-
-```text
-module
-class
-function
-method
-```
-
-Metadata:
-
-```text
-path
-language
-symbol
-symbol_type
-parent_symbol
-start_line
-end_line
-```
-
----
-
-## 15. Embedding service
-
-Embedding model работает отдельным GPU service:
-
-```text
-vllm-embeddings
-```
-
-Начальная модель:
-
-```text
-ai-sage/Giga-Embeddings-instruct-480M-0826
-```
-
-Endpoint:
+### 6.1. Workspace list API
 
 ```http
-POST /v1/embeddings
+GET /workspaces
 ```
 
-`rag-api` и `rag-worker` используют единый embedding client и не загружают собственные копии модели.
+Endpoint возвращает все workspace в детерминированном порядке
+`created_at ASC, id ASC`. На первом этапе объём данных мал, поэтому ответ является
+JSON-массивом. Параметры pagination добавляются только при подтверждённой
+необходимости, без изменения полей элемента.
 
-GPU integration tests могут находиться в отдельном verification profile; обычные unit/contract tests используют stub.
-
----
-
-## 16. External LLM
-
-Generation/extraction выполняется через OpenAI-compatible API.
-
-Минимальная Demo configuration:
-
-```text
-base_url
-model
-api_key / secret_ref
-timeout
-```
-
-Один endpoint/model может использоваться одновременно для extraction и generation. Полноценные LLM profiles можно добавить после подтверждения основного Graph RAG flow.
-
----
-
-## 17. Qdrant
-
-Qdrant — единственный vector storage.
-
-Vector writes выполняются через LightRAG integration, а не через public application API.
-
-Workspace filter/namespace формируется сервером на основании `AuthorizedWorkspaceContext` и не может быть подменён пользовательским query parameter.
-
----
-
-## 18. Neo4j
-
-Neo4j — graph storage LightRAG.
-
-Прямой пользовательский Cypher не является частью API.
-
-В Demo локальный diagnostic port допустим для разработчика, но application boundary остаётся `rag-api`.
-
-Production network hardening выполняется Post-MVP.
-
----
-
-## 19. LightRAG runtime registry
-
-Каждый application process использует `LightRAGRuntimeRegistry`:
-
-```text
-storage_key A -> LightRAG(...)
-storage_key B -> LightRAG(...)
-storage_key C -> LightRAG(...)
-```
-
-Registry:
-
-- создаёт runtime только по server-resolved workspace;
-- использует `storage_key` как namespace;
-- поддерживает lazy initialization;
-- корректно закрывает runtime;
-- не принимает физический workspace namespace напрямую от клиента.
-
----
-
-## 20. Current upload indexing flow
-
-```text
-POST /v1/workspaces/{id}/documents
-    │
-    ▼
-DemoOwnerContext
-    │
-    ▼
-validate workspace/file
-    │
-    ▼
-store original in MinIO under immutable object key
-    │
-    ▼
-atomically persist document revision + durable PENDING job
-    │
-    ▼
-return document status = PENDING + job_id
-
-rag-worker
-    │
-    ▼
-claim job for the immutable revision
-    │
-    ▼
-parse revision source
-    │
-    ▼
-IndexingService.index(...)
-    │
-    ▼
-LightRAG insert
-    ├── embeddings -> vLLM
-    ├── vectors    -> Qdrant
-    ├── graph      -> Neo4j
-    └── KV/status  -> PostgreSQL
-    │
-    ▼
-document = READY
-```
-
-HTTP request не выполняет parsing или indexing. Если indexing в `rag-worker`
-завершается ошибкой, document и job переходят в `FAILED`, а immutable original
-source остаётся в MinIO.
-
----
-
-## 21. MVP asynchronous workflow
-
-После Demo API больше не выполняет длительный indexing inline:
-
-```text
-upload
-  -> store immutable revision
-  -> create durable job
-  -> return PENDING + job_id
-```
-
-Worker:
-
-```text
-claim job
-  -> heartbeat
-  -> IndexingService
-  -> SUCCEEDED / RETRY / FAILED
-```
-
-Для MVP достаточно PostgreSQL queue с `FOR UPDATE SKIP LOCKED`; Kafka/RabbitMQ не требуются.
-Job ссылается на конкретную immutable revision. Активными считаются `PENDING`,
-`RUNNING` и `RETRY`; PostgreSQL допускает только одну такую mutation job на logical
-document. `SUCCEEDED`, `FAILED` и `CANCELLED` терминальны и друг с другом не конфликтуют.
-Ошибка сохраняется только как allow-listed классификационный код; произвольные
-сообщения, traceback и credentials в jobs не записываются.
-Архитектурное решение: [ADR 0015](decisions/0015-durable-indexing-jobs.md).
-
----
-
-## 22. Query pipeline
-
-```text
-POST /v1/workspaces/{id}/query
-    │
-    ▼
-IdentityResolver
-    │
-    ▼
-WorkspaceAccessPolicy
-    │
-    ▼
-AuthorizedWorkspaceContext
-    │
-    ▼
-LightRAGRuntimeRegistry
-    │
-    ▼
-LightRAG query
-    ├── Qdrant
-    ├── Neo4j
-    ├── PostgreSQL LightRAG storage
-    └── External LLM
-    │
-    ▼
-answer + sources
-```
-
-В Demo/MVP первые два шага реализованы owner adapter'ами и не требуют внешних security services.
-
----
-
-## 23. Query response
-
-Минимальный Demo contract:
+Пример ответа:
 
 ```json
-{
-  "answer": "...",
-  "workspace_id": "...",
-  "sources": [
-    {
-      "document_id": "...",
-      "filename": "README.md"
-    }
-  ],
-  "request_id": "..."
-}
+[
+  {
+    "id": "12345678-1234-5678-1234-567812345678",
+    "name": "Engineering",
+    "slug": "engineering",
+    "description": "Архитектура и исходный код продукта",
+    "status": "ACTIVE",
+    "created_at": "2026-09-24T10:00:00Z",
+    "updated_at": "2026-09-24T10:00:00Z"
+  }
+]
 ```
 
-MVP расширяет source metadata:
-
-```text
-revision
-path
-language
-symbol
-start_line
-end_line
-```
-
----
-
-## 24. Public API — Demo
-
-```text
-GET    /health/live
-GET    /health/ready
-
-POST   /v1/workspaces
-GET    /v1/workspaces
-GET    /v1/workspaces/{id}
-
-POST   /v1/workspaces/{id}/documents
-PUT    /v1/workspaces/{id}/documents/{document_id}
-GET    /v1/workspaces/{id}/documents
-GET    /v1/workspaces/{id}/documents/{document_id}
-
-POST   /v1/workspaces/{id}/query
-```
-
-На Demo нет `/members`, login endpoints и user administration.
-
----
-
-## 25. Public API — MVP additions
-
-```text
-DELETE /v1/workspaces/{id}/documents/{document_id}
-GET    /v1/jobs/{job_id}
-POST   /v1/workspaces/{id}/maintenance/reindex
-```
-
----
-
-## 26. Error model
-
-Публичный API не возвращает internal exceptions LightRAG/Qdrant/Neo4j.
-
-Минимальные codes:
-
-```text
-WORKSPACE_NOT_FOUND
-DOCUMENT_NOT_FOUND
-DOCUMENT_CONFLICT
-UNSUPPORTED_FILE_TYPE
-FILE_TOO_LARGE
-INDEXING_FAILED
-QUERY_FAILED
-LLM_UNAVAILABLE
-EMBEDDING_UNAVAILABLE
-INTERNAL_ERROR
-```
-
-Каждый error response содержит `request_id`.
-
-После внедрения production security добавляются стабильные authentication/authorization errors.
-
----
-
-## 27. Operational logging
-
-Structured JSON logging входит в Demo.
-
-Минимальные fields:
-
-```text
-timestamp
-level
-service
-request_id
-workspace_id
-document_id
-operation
-duration_ms
-result
-```
-
-Не логируются:
-
-```text
-Authorization header
-JWT
-API keys
-LLM credentials
-полный document content
-raw embeddings
-полные prompts/responses
-```
-
-Граница реализуется allow-list схемой, а не поиском известных секретных
-паттернов. В JSON проходят только обязательные operational fields,
-типизированные `OperationalEvent` и явно разрешённые scalar/metric extras.
-Произвольные message, mapping keys/values и exception text отбрасываются целиком.
-Это сохраняет метрики вроде `response_time_ms`, `content_type` и числовых рядов
-`durations_ms`, не превращая произвольный payload в канал логирования.
-
-Наличие или отсутствие OIDC не должно менять logging boundary.
-
----
-
-## 28. Consistency model
-
-PostgreSQL, MinIO, Neo4j и Qdrant не объединяются в distributed ACID transaction.
-
-### Demo
-
-Гарантируется минимум:
-
-```text
-observable state
-source persisted before indexing
-stable failures
-manual retry possible
-```
-
-### MVP
-
-Добавляются:
-
-```text
-idempotency
-retryability
-durable jobs
-restart recovery
-repairability
-```
-
-PostgreSQL становится координатором workflow.
-
----
-
-## 29. Source of truth
-
-Для Demo/MVP source of truth:
-
-```text
-PostgreSQL application metadata
-+
-MinIO original sources
-```
-
-Qdrant и Neo4j — derived indexes.
-
-На раннем Demo автоматический disaster-recovery rebuild не обязателен, но архитектура не должна делать Qdrant/Neo4j единственным экземпляром исходных данных.
-
----
-
-## 30. Docker Compose
-
-Demo stack:
-
-```text
-rag-api
-postgres
-minio
-qdrant
-neo4j
-vllm-embeddings
-```
-
-External LLM может находиться вне Compose.
-
-MVP добавляет:
-
-```text
-rag-worker
-```
-
-Persistent volumes:
-
-```text
-postgres_data
-minio_data
-qdrant_data
-neo4j_data
-hf_cache
-```
-
-GPU назначается только `vllm-embeddings`.
-
-Первый Compose-инкремент запускает `rag-api` и PostgreSQL в общей internal-сети.
-PostgreSQL имеет healthcheck и named volume `postgres_data`; `rag-api` стартует
-после состояния `healthy`. Его `/health/ready` подтверждает аутентификацию и
-выполнение `SELECT 1`, тогда как `/health/live` не зависит от PostgreSQL.
-Application schema создаётся только последующими versioned migrations. Детали
-зафиксированы в [ADR 0002](decisions/0002-postgresql-compose-readiness.md).
-
----
-
-## 31. Initialization
-
-`./scripts/init.sh` является частью Demo exit criteria.
-
-Скрипт:
-
-1. проверяет prerequisites;
-2. создаёт/проверяет `.env` requirements;
-3. запускает Compose;
-4. ждёт PostgreSQL;
-5. применяет application migrations;
-6. ждёт MinIO/Qdrant/Neo4j/vLLM readiness;
-7. проверяет `rag-api /health/ready`;
-8. не удаляет persistent data при повторном запуске.
-
-В `demo_owner` mode скрипт **не требует** OIDC issuer, audience, JWKS или user bootstrap.
-
----
-
-## 32. Production security — только Post-MVP
-
-После завершения functional MVP вводятся следующие сущности:
-
-```text
-principals
-workspace_members
-```
-
-Базовые roles:
-
-```text
-reader
-writer
-admin
-owner
-```
-
-Permissions:
-
-```text
-workspace.read
-workspace.manage
-workspace.delete
-query.execute
-document.read
-document.create
-document.update
-document.delete
-members.read
-members.manage
-index.rebuild
-index.repair
-```
-
-OIDC token определяет authenticated principal, а persisted membership определяет permissions.
-
-Production adapter должен создавать тот же `AuthorizedWorkspaceContext`, который до этого создавал `DemoOwnerAccessPolicy`.
-
-Именно это обеспечивает отсутствие влияния auth implementation на Graph RAG domain logic.
-
----
-
-## 33. Migration `demo_owner -> OIDC/RBAC`
-
-Переход выполняется без изменения document/query contracts:
-
-```text
-before:
-request
- -> DemoOwnerIdentityResolver
- -> DemoOwnerAccessPolicy
- -> AuthorizedWorkspaceContext
- -> domain service
-
-
-after:
-request
- -> OIDCIdentityResolver
- -> RBACWorkspaceAccessPolicy
- -> AuthorizedWorkspaceContext
- -> domain service
-```
-
-Меняется только security adapter и добавляются security tables/endpoints.
-
-Workspace `storage_key`, document ids, MinIO objects и LightRAG indexes не пересоздаются только из-за включения OIDC.
-
----
-
-## 34. Security invariants
-
-Даже в Demo фиксируются инварианты, полезные для будущего production режима:
-
-1. `rag-api` — единственная public Graph RAG API boundary.
-2. Client не выбирает physical `storage_key`.
-3. Workspace context формируется сервером.
-4. Neo4j/Qdrant/PostgreSQL/MinIO/vLLM не являются пользовательскими data API.
-5. Original source сохраняется до indexing.
-6. Application не модифицирует semantic LightRAG graph/vector entities вручную в обход LightRAG lifecycle.
-7. Secrets и raw confidential content не попадают в logs.
-8. `demo_owner` не должен быть неявным fallback production security mode.
-
-Post-MVP добавляются user authorization invariants.
-
----
-
-## 35. Итоговый стек
-
-```text
-API
-    Python
-    FastAPI
-
-Graph RAG
-    LightRAG Core
-
-Application metadata / jobs
-    PostgreSQL
-
-Source storage
-    MinIO / S3
-
-Vector storage
-    Qdrant
-
-Graph storage
-    Neo4j
-
-Embeddings
-    vLLM
-    ai-sage/Giga-Embeddings-instruct-480M-0826
-
-Generation
-    OpenAI-compatible API
-
-Demo/MVP security
-    DemoOwnerIdentityResolver
-    DemoOwnerAccessPolicy
-
-Post-MVP security
-    OIDC / OAuth2
-    application RBAC/ACL
-
-Code parsing
-    Demo: plain text / Markdown
-    MVP: Tree-sitter
-
-Async processing
-    Demo/MVP: rag-worker + PostgreSQL jobs
-
-Logging
-    structured JSON
-```
-
----
-
-## 36. Главная граница ответственности
-
-```text
-                    APPLICATION BOUNDARY
-
-                         rag-api
-                            │
-           ┌────────────────┼────────────────┐
-           │                │                │
-           ▼                ▼                ▼
-   Security Adapter   Domain Services   PostgreSQL
-                           │
-                           ├── MinIO
-                           ├── LightRAG Core
-                           │     ├── Qdrant
-                           │     ├── Neo4j
-                           │     ├── PostgreSQL storage
-                           │     ├── vLLM
-                           │     └── External LLM
-                           │
-                           └── MVP: rag-worker
-```
-
-Security adapter определяет **кто и что может делать**.
-
-Domain services определяют **как работает Graph RAG functionality**.
-
-На Demo/MVP security adapter является owner-only заглушкой. После MVP он заменяется полноценным OIDC/RBAC adapter без изменения основной функциональности.
-
----
-
-## 37. Критерии завершения этапов
-
-### Demo exit criteria
-
-```text
-clean repo
- -> ./scripts/init.sh
- -> create workspace
- -> upload document
- -> READY
- -> query
- -> answer + source
-```
-
-Без OIDC, JWT и member setup.
-
-### MVP exit criteria
-
-```text
-Demo flow
-+
-async worker
-+
-revisions/update/delete
-+
-retry/restart recovery
-+
-AST-aware source processing
-+
-reindex
-+
-multi-workspace data isolation
-```
-
-### Post-MVP security exit criteria
-
-```text
-OIDC principal
- -> workspace membership
- -> RBAC permission
- -> same AuthorizedWorkspaceContext
- -> same domain services
-```
-
-Такой порядок разработки минимизирует time-to-demo и одновременно сохраняет чистую границу для последующего production security.
-
-## Architecture decisions
-
-- [0018 — Durable удаление документа через lifecycle LightRAG](decisions/0018-durable-document-deletion.md)
-- [0017 — Замена индексированного документа через lifecycle LightRAG](decisions/0017-lightrag-document-replacement.md)
-- [0009 — Единый клиент embeddings](decisions/0009-shared-embedding-client.md)
+`storage_key`, embedding profile и другие physical details не возвращаются.
+
+## 7. Public REST API
+
+| Метод и path | Назначение | Результат |
+|---|---|---|
+| `GET /health/live` | Liveness процесса | `200` без downstream checks |
+| `GET /health/ready` | Готовность API | `200/503` |
+| `POST /workspaces` | Создать workspace с `name`, `slug`, `description?` | Workspace metadata |
+| `GET /workspaces` | Получить workspace с описаниями | Массив workspace |
+| `GET /workspaces/{workspace_id}` | Получить один workspace | Workspace metadata |
+| `POST /workspaces/{workspace_id}/maintenance/reindex` | Поставить reindex jobs | Job IDs |
+| `GET /v1/jobs/{job_id}` | Получить публичный статус durable job | Job metadata |
+| `POST /v1/workspaces/{workspace_id}/documents` | Загрузить новый document | Revision и job |
+| `PUT /v1/workspaces/{workspace_id}/documents/{document_id}` | Идемпотентный upsert | Action, revision и job |
+| `GET /v1/workspaces/{workspace_id}/documents` | Список documents | Metadata array |
+| `GET /v1/workspaces/{workspace_id}/documents/{document_id}` | Metadata document | Document metadata |
+| `DELETE /v1/workspaces/{workspace_id}/documents/{document_id}` | Асинхронное удаление | Delete job |
+| `POST /v1/workspaces/{workspace_id}/query` | Graph RAG query | Answer, request ID, sources |
+
+До MCP-этапа REST contract дополняется только необходимыми workspace list и
+description полями. Существующие document/query paths и response semantics
+сохраняются.
+
+## 8. Основные потоки
+
+### 8.1. Создание и чтение workspace
+
+1. Клиент отправляет `name`, `slug` и необязательный `description`.
+2. PostgreSQL генерирует UUID и immutable `storage_key`.
+3. API возвращает только публичные поля.
+4. List/get читают metadata без инициализации LightRAG runtime.
+
+### 8.2. Загрузка и индексация документа
+
+1. API проверяет workspace, имя файла, media type и размер.
+2. Original source сохраняется в MinIO.
+3. В одной PostgreSQL transaction создаются document/revision metadata и job.
+4. API возвращает asynchronous result с `job_id`.
+5. Worker получает lease, парсит source и вызывает LightRAG.
+6. LightRAG получает embeddings из уже работающего внешнего vLLM.
+7. После успешной записи Qdrant/Neo4j revision становится активной, а document —
+   `READY`.
+
+### 8.3. Query
+
+1. API разрешает workspace по UUID и получает его server-side namespace.
+2. LightRAG выполняет retrieval в workspace-specific Qdrant и Neo4j data.
+3. Внешний LLM формирует ответ.
+4. API возвращает `answer`, `workspace_id`, `request_id` и source metadata.
+
+### 8.4. Reindex
+
+1. API сравнивает сохранённый и активный index contract.
+2. Несовместимые active revisions помечаются `requires_reindex`.
+3. Создаются durable reindex jobs без дублирования уже активных jobs.
+4. Worker восстанавливает derived data из PostgreSQL metadata и MinIO source.
+
+## 9. Consistency и восстановление
+
+- Create/update/delete/reindex используют durable jobs.
+- Active revision переключается только после успешного завершения indexing.
+- Ошибка новой revision не уничтожает предыдущую рабочую revision.
+- Lease и attempt fencing не позволяют stale worker завершить чужую job.
+- Повторная загрузка идентичного содержимого не создаёт новую revision.
+- Потеря Qdrant/Neo4j устраняется reindex из PostgreSQL и MinIO.
+- Смена embedding profile требует versioned namespace и reindex.
+
+## 10. Docker Compose и сетевые границы
+
+Compose управляет только application и data services:
+
+- `rag-api`;
+- `rag-worker`;
+- PostgreSQL;
+- MinIO;
+- Qdrant;
+- Neo4j.
+
+Embedding vLLM и generation provider находятся за пределами Compose.
+
+| Service | Host ports по умолчанию | Назначение |
+|---|---:|---|
+| `rag-api` | `8000` | REST, Swagger, ReDoc |
+| MinIO | `9000`, `9001` | S3 API и Console |
+| Qdrant | `6333` | Dashboard/API для диагностики |
+| Neo4j | `7474`, `7687` | Browser/HTTP и Bolt |
+| PostgreSQL | не публикуется | Только internal network |
+| External vLLM | не управляется проектом | Задаётся configuration |
+
+Порты переопределяются environment variables. Neo4j, MinIO и Qdrant доступны с
+host только для работы в доверенной среде. В production-like окружении exposure
+регулируется network/firewall configuration вне Graph Blizz.
+
+## 11. Observability и безопасное логирование
+
+Structured logs содержат `request_id`, `service`, `workspace_id`, `document_id`,
+`operation`, `duration_ms` и `result`. В логи не попадают:
+
+- provider credentials;
+- document content;
+- embeddings;
+- prompts и полные model responses;
+- MinIO object secrets;
+- внутренний `storage_key` в публичном HTTP-контексте.
+
+Ошибки внешних model endpoints отображаются в стабильные application errors без
+утечки provider response bodies.
+
+## 12. MCP над существующим API
+
+### 12.1. Граница MCP
+
+MCP реализуется отдельным процессом/пакетом `graph-blizz-mcp`. Он использует
+настраиваемый `GRAPH_BLIZZ_API_BASE_URL` и вызывает только документированные REST
+endpoints. Это сохраняет единые validation, job semantics, workspace resolution,
+logging и error mapping для HTTP и MCP клиентов.
+
+MCP server не импортирует repositories, storage adapters или LightRAG runtime из
+`rag-api` и не имеет credentials PostgreSQL/MinIO/Qdrant/Neo4j.
+
+### 12.2. Первая версия MCP tools
+
+| MCP tool | REST API |
+|---|---|
+| `list_workspaces` | `GET /workspaces` |
+| `get_workspace` | `GET /workspaces/{workspace_id}` |
+| `list_documents` | `GET /v1/workspaces/{workspace_id}/documents` |
+| `get_document` | `GET /v1/workspaces/{workspace_id}/documents/{document_id}` |
+| `query_workspace` | `POST /v1/workspaces/{workspace_id}/query` |
+| `upload_document` | `POST /v1/workspaces/{workspace_id}/documents` |
+| `upsert_document` | `PUT /v1/workspaces/{workspace_id}/documents/{document_id}` |
+| `delete_document` | `DELETE /v1/workspaces/{workspace_id}/documents/{document_id}` |
+| `reindex_workspace` | `POST /workspaces/{workspace_id}/maintenance/reindex` |
+
+Первая поставка начинает с read/query tools, затем добавляет mutating tools.
+Long-running operations возвращают `job_id` и текущее состояние, а MCP server не
+держит соединение до окончания indexing.
+
+### 12.3. MCP transport и ошибки
+
+- основной transport для локальной интеграции — `stdio`;
+- Streamable HTTP может быть добавлен позже без изменения tool contracts;
+- validation errors REST преобразуются в понятные MCP tool errors;
+- `404`, `409`, `413`, `415`, `502` и `503` не маскируются как успешный result;
+- timeout MCP HTTP client ограничен и конфигурируется;
+- tool responses содержат только публичные REST fields.
+
+## 13. План этапов
+
+### Этап A — завершение REST-контура
+
+1. Опубликовать Neo4j HTTP и Bolt ports и обновить диагностику.
+2. Удалить встроенный Compose vLLM и перевести init/tests/docs на обязательный
+   внешний embedding endpoint.
+3. Добавить `workspaces.description`, `GET /workspaces` и согласованные create/get
+   responses.
+4. Добавить публичный `GET /v1/jobs/{job_id}` для polling asynchronous operations.
+5. Подтвердить полный REST lifecycle с внешним embedding contract stub или
+   доступным vLLM.
+
+### Этап B — MCP поверх REST
+
+1. Создать типизированный async HTTP client к текущему API.
+2. Реализовать `list/get/query` MCP tools.
+3. Реализовать document mutation и reindex tools.
+4. Добавить MCP contract/integration tests, packaging и инструкции запуска.
+
+### Этап C — дальнейшая эксплуатационная устойчивость
+
+После MCP допустимы disaster-recovery tests, metrics/tracing и deployment
+hardening. Добавление auth не является частью этого этапа.
+
+## 14. Критерии завершения
+
+### REST-ready
+
+- Neo4j Browser доступен на configurable host HTTP port, Bolt — на configurable
+  host Bolt port;
+- Compose не содержит embedding model service, GPU reservation или model cache;
+- `rag-api` и `rag-worker` используют один внешний embeddings configuration;
+- workspace можно создать с description и получить в `GET /workspaces`;
+- существующий document lifecycle и query проходят regression suite;
+- API работает без credentials/Authorization header.
+
+### MCP-ready
+
+- MCP client получает список workspace и их описания;
+- MCP client выполняет Graph RAG query и получает те же sources, что REST client;
+- document mutations возвращают REST-derived revision/job metadata;
+- MCP не подключается к storage напрямую;
+- ошибки и timeouts проверены contract tests;
+- локальный запуск MCP задокументирован одной воспроизводимой командой.
+
+## 15. Architecture decisions
+
+Существующие ADR фиксируют уже реализованные решения MVP. ADR о DemoOwner описывает
+историческую внутреннюю совместимость текущего кода, но не создаёт будущую задачу
+на OIDC/RBAC. Новые решения должны быть зафиксированы отдельными ADR:
+
+- публикация Neo4j HTTP/Bolt ports в доверенном deployment;
+- внешний embeddings endpoint без lifecycle модели в Graph Blizz;
+- workspace description и list contract;
+- MCP как HTTP adapter над REST API.
